@@ -36,6 +36,11 @@ from gym_carla.envs.render import BirdeyeRender
 from gym_carla.envs.route_planner import RoutePlanner
 from gym_carla.envs.misc import *
 
+# Import sensors
+from gym_carla.sensors.camera_sensors import CameraSensors
+from gym_carla.sensors.lidar_sensor import LIDARSensor
+from gym_carla.sensors.radar_sensor import RadarSensor
+
 VIRIDIS = np.array(cm.get_cmap('plasma').colors)
 VID_RANGE = np.linspace(0.0, 1.0, VIRIDIS.shape[0])
 class CarlaEnv(gym.Env):
@@ -116,31 +121,30 @@ class CarlaEnv(gym.Env):
     self.lidar_bp.set_attribute('points_per_second', '500000')
 
     # Radar sensor
-    self.radar_data = None
-    self.radar_bp = self.world.get_blueprint_library().find('sensor.other.radar') # Fetch the blueprint from CARLA's library
-    self.radar_bp.set_attribute('horizontal_fov', str(35))                        # Set horizontal field of view's angle
-    self.radar_bp.set_attribute('vertical_fov', str(20))                          # Set vertical field of view's angle
-    self.radar_bp.set_attribute('range', str(20))                                 # Set detection range (meters)
-    self.radar_bp.set_attribute('points_per_second', '15000')                     # Set scan frequency (points per second)
-    self.radar_trans = carla.Transform(carla.Location(x=2.0, z=1.0))              # Set location of sensor relative to vehicle (meters)
+    # self.radar_data = None
+    # self.radar_bp = self.world.get_blueprint_library().find('sensor.other.radar') # Fetch the blueprint from CARLA's library
+    # self.radar_bp.set_attribute('horizontal_fov', str(35))                        # Set horizontal field of view's angle
+    # self.radar_bp.set_attribute('vertical_fov', str(20))                          # Set vertical field of view's angle
+    # self.radar_bp.set_attribute('range', str(20))                                 # Set detection range (meters)
+    # self.radar_bp.set_attribute('points_per_second', '15000')                     # Set scan frequency (points per second)
+    # self.radar_trans = carla.Transform(carla.Location(x=2.0, z=1.0))              # Set location of sensor relative to vehicle (meters)
+    self.radar_sensor = RadarSensor(self.world)
 
     # Camera sensor
     self.camera_img = np.zeros((4, self.obs_size, self.obs_size, 3), dtype = np.dtype("uint8"))
-
     self.camera_bp = self.world.get_blueprint_library().find('sensor.camera.rgb')
+
     # Modify the attributes of the blueprint to set image resolution and field of view.
     self.camera_bp.set_attribute('image_size_x', str(self.obs_size))
     self.camera_bp.set_attribute('image_size_y', str(self.obs_size))
     self.camera_bp.set_attribute('fov', '110')
+
     # Set the time in seconds between sensor captures
     self.camera_bp.set_attribute('sensor_tick', '0.02')
 
     self.camera_trans = carla.Transform(carla.Location(x=1.5, z=1.5))
-
     self.camera_trans2 = carla.Transform(carla.Location(x=0.7, y=0.9, z=1), carla.Rotation(pitch=-35.0, yaw=134.0))
-
     self.camera_trans3 = carla.Transform(carla.Location(x=0.7, y=-0.9, z=1), carla.Rotation(pitch=-35.0, yaw=-134.0))
-
     self.camera_trans4 = carla.Transform(carla.Location(x=-1.5, z=1.5), carla.Rotation(yaw=180.0))
 
     # Set fixed simulation step for synchronous mode
@@ -162,7 +166,7 @@ class CarlaEnv(gym.Env):
     self.camera2_sensor = None
     self.camera3_sensor = None
     self.camera4_sensor = None
-    self.radar_sensor = None #cleared radar
+    self.radar_sensor.radar_sensor = None
 
     # Delete sensors, vehicles and walkers
     self._clear_all_actors(['sensor.other.collision', 'sensor.lidar.ray_cast', 'sensor.camera.rgb', 'vehicle.*', 'controller.ai.walker', 'walker.*'])
@@ -254,35 +258,36 @@ class CarlaEnv(gym.Env):
       point_list.colors = o3d.utility.Vector3dVector(int_color)
 
     # Add radar sensor
-    self.radar_sensor = self.world.spawn_actor(self.radar_bp, self.radar_trans, attach_to=self.ego)
-    self.radar_sensor.listen(lambda data: get_radar_data(data))
-    def get_radar_data(radar_data):
-      velocity_range = 7.5 # m/s
-      current_rot = radar_data.transform.rotation
-      for detect in radar_data:
-        azi = math.degrees(detect.azimuth)      # x
-        alt = math.degrees(detect.altitude)     # y
-        fw_vec = carla.Vector3D(x=detect.depth - 0.25)    # Adjust the distance slightly so the dots can be properly seen
-        carla.Transform(
-            carla.Location(),
-            carla.Rotation(
-                pitch=current_rot.pitch + alt,
-                yaw=current_rot.yaw + azi,
-                roll=current_rot.roll)).transform(fw_vec)
+    # self.radar_sensor = self.world.spawn_actor(self.radar_bp, self.radar_trans, attach_to=self.ego)
+    # self.radar_sensor.listen(lambda data: get_radar_data(data))
+    # def get_radar_data(radar_data):
+    #   velocity_range = 7.5 # m/s
+    #   current_rot = radar_data.transform.rotation
+    #   for detect in radar_data:
+    #     azi = math.degrees(detect.azimuth)      # x
+    #     alt = math.degrees(detect.altitude)     # y
+    #     fw_vec = carla.Vector3D(x=detect.depth - 0.25)    # Adjust the distance slightly so the dots can be properly seen
+    #     carla.Transform(
+    #         carla.Location(),
+    #         carla.Rotation(
+    #             pitch=current_rot.pitch + alt,
+    #             yaw=current_rot.yaw + azi,
+    #             roll=current_rot.roll)).transform(fw_vec)
 
-        def clamp(min_v, max_v, value):
-            return max(min_v, min(value, max_v))
+    #     def clamp(min_v, max_v, value):
+    #         return max(min_v, min(value, max_v))
 
-        norm_velocity = detect.velocity / velocity_range # range [-1, 1]
-        r = int(clamp(0.0, 1.0, 1.0 - norm_velocity) * 255.0)
-        g = int(clamp(0.0, 1.0, 1.0 - abs(norm_velocity)) * 255.0)
-        b = int(abs(clamp(- 1.0, 0.0, - 1.0 - norm_velocity)) * 255.0)
-        self.world.debug.draw_point(
-            radar_data.transform.location + fw_vec,
-            size=0.075,
-            life_time=0.06,
-            persistent_lines=False,
-            color=carla.Color(r, g, b))
+    #     norm_velocity = detect.velocity / velocity_range # range [-1, 1]
+    #     r = int(clamp(0.0, 1.0, 1.0 - norm_velocity) * 255.0)
+    #     g = int(clamp(0.0, 1.0, 1.0 - abs(norm_velocity)) * 255.0)
+    #     b = int(abs(clamp(- 1.0, 0.0, - 1.0 - norm_velocity)) * 255.0)
+    #     self.world.debug.draw_point(
+    #         radar_data.transform.location + fw_vec,
+    #         size=0.075,
+    #         life_time=0.06,
+    #         persistent_lines=False,
+    #         color=carla.Color(r, g, b))
+    self.radar_sensor.spawn_and_attach(self.ego)
 
     def run_open3d():
       self.vis = o3d.visualization.Visualizer()
@@ -304,48 +309,45 @@ class CarlaEnv(gym.Env):
     thread_open3d.start()
 
 
-    # Add camera sensors
-    self.camera_sensor = self.world.spawn_actor(self.camera_bp, self.camera_trans, attach_to=self.ego)
-    
-    self.camera_sensor2 = self.world.spawn_actor(self.camera_bp, self.camera_trans2, attach_to=self.ego)
-   
-    self.camera_sensor3 = self.world.spawn_actor(self.camera_bp, self.camera_trans3, attach_to=self.ego)
-    
-    self.camera_sensor4 = self.world.spawn_actor(self.camera_bp, self.camera_trans4, attach_to=self.ego)
-    
+    # # Add camera sensors
+    # self.camera_sensor = self.world.spawn_actor(self.camera_bp, self.camera_trans, attach_to=self.ego)
+    # self.camera_sensor2 = self.world.spawn_actor(self.camera_bp, self.camera_trans2, attach_to=self.ego)
+    # self.camera_sensor3 = self.world.spawn_actor(self.camera_bp, self.camera_trans3, attach_to=self.ego)
+    # self.camera_sensor4 = self.world.spawn_actor(self.camera_bp, self.camera_trans4, attach_to=self.ego)
 
-    def get_camera_img(data):
-      array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
-      array = np.reshape(array, (data.height, data.width, 4))
-      array = array[:, :, :3]
-      array = array[:, :, ::-1]
-      self.camera_img[0] = array
+    # def get_camera_img(data):
+    #   array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
+    #   array = np.reshape(array, (data.height, data.width, 4))
+    #   array = array[:, :, :3]
+    #   array = array[:, :, ::-1]
+    #   self.camera_img[0] = array
 
-    def get_camera_img2(data):
-      array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
-      array = np.reshape(array, (data.height, data.width, 4))
-      array = array[:, :, :3]
-      array = array[:, :, ::-1]
-      self.camera_img[1] = array
+    # def get_camera_img2(data):
+    #   array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
+    #   array = np.reshape(array, (data.height, data.width, 4))
+    #   array = array[:, :, :3]
+    #   array = array[:, :, ::-1]
+    #   self.camera_img[1] = array
 
-    def get_camera_img3(data):
-      array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
-      array = np.reshape(array, (data.height, data.width, 4))
-      array = array[:, :, :3]
-      array = array[:, :, ::-1]
-      self.camera_img[2] = array
+    # def get_camera_img3(data):
+    #   array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
+    #   array = np.reshape(array, (data.height, data.width, 4))
+    #   array = array[:, :, :3]
+    #   array = array[:, :, ::-1]
+    #   self.camera_img[2] = array
 
-    def get_camera_img4(data):
-      array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
-      array = np.reshape(array, (data.height, data.width, 4))
-      array = array[:, :, :3]
-      array = array[:, :, ::-1]
-      self.camera_img[3] = array
+    # def get_camera_img4(data):
+    #   array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
+    #   array = np.reshape(array, (data.height, data.width, 4))
+    #   array = array[:, :, :3]
+    #   array = array[:, :, ::-1]
+    #   self.camera_img[3] = array
     
-    self.camera_sensor.listen(lambda data: get_camera_img(data))
-    self.camera_sensor2.listen(lambda data: get_camera_img2(data))
-    self.camera_sensor3.listen(lambda data: get_camera_img3(data))
-    self.camera_sensor4.listen(lambda data: get_camera_img4(data))
+    # self.camera_sensor.listen(lambda data: get_camera_img(data))
+    # self.camera_sensor2.listen(lambda data: get_camera_img2(data))
+    # self.camera_sensor3.listen(lambda data: get_camera_img3(data))
+    # self.camera_sensor4.listen(lambda data: get_camera_img4(data))
+
     # Update timesteps
     self.time_step=0
     self.reset_step+=1

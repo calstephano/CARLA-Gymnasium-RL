@@ -45,7 +45,7 @@ class LIDARSensor:
         # Listen for data
         self.lidar_sensor.listen(lambda data: self._on_data(data))
 
-    def _on_data(self, point_cloud, point_list):
+    def _on_data(self, point_cloud):
         # Get the LIDAR data and convert it to a numpy array.
         p_cloud_size = len(point_cloud)
         lidar_data = np.copy(np.frombuffer(point_cloud.raw_data, dtype=np.dtype('f4')))

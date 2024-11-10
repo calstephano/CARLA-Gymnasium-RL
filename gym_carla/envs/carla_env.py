@@ -32,6 +32,7 @@ from gym_carla.envs.route_planner import RoutePlanner
 from gym_carla.envs.misc import *
 
 # Import sensors
+from gym_carla.sensors.collision_detector import CollisionDetector
 from gym_carla.sensors.camera_sensors import CameraSensors
 from gym_carla.sensors.lidar_sensor import LIDARSensor
 from gym_carla.sensors.radar_sensor import RadarSensor
@@ -96,12 +97,8 @@ class CarlaEnv(gym.Env):
     # Create the ego vehicle blueprint
     self.ego_bp = self._create_vehicle_bluepprint(params['ego_vehicle_filter'], color='49,8,8')
 
-    # Collision sensor
-    self.collision_hist = [] # The collision history
-    self.collision_hist_l = 1 # collision history length
-    self.collision_bp = self.world.get_blueprint_library().find('sensor.other.collision')
-
     # Initialize sensors
+    self.collision_detector = CollisionDetector(self.world)
     self.lidar_sensor = LIDARSensor(self.world)
     self.radar_sensor = RadarSensor(self.world)
 
@@ -135,7 +132,7 @@ class CarlaEnv(gym.Env):
 
   def reset(self, seed = None):
     # Clear sensor objects
-    self.collision_sensor = None
+    self.collision_detector.collision_detector = None
     self.camera_sensor = None
     self.camera2_sensor = None
     self.camera3_sensor = None
@@ -197,18 +194,8 @@ class CarlaEnv(gym.Env):
         ego_spawn_times += 1
         time.sleep(0.1)
 
-    # Add collision sensor
-    self.collision_sensor = self.world.spawn_actor(self.collision_bp, carla.Transform(), attach_to=self.ego)
-    self.collision_sensor.listen(lambda event: get_collision_hist(event))
-    def get_collision_hist(event):
-      impulse = event.normal_impulse
-      intensity = np.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
-      self.collision_hist.append(intensity)
-      if len(self.collision_hist)>self.collision_hist_l:
-        self.collision_hist.pop(0)
-    self.collision_hist = []
-    
     # Spawn and attach sensors
+    self.collision_detector.spawn_and_attach(self.ego)
     self.lidar_sensor.spawn_and_attach(self.ego)
     self.radar_sensor.spawn_and_attach(self.ego)
 
@@ -571,38 +558,37 @@ class CarlaEnv(gym.Env):
 
   def _get_reward(self):
     """Calculate the step reward."""
-    # reward for speed tracking
+    # Reward for speed tracking
     v = self.ego.get_velocity()
     speed = np.sqrt(v.x**2 + v.y**2)
     r_speed = -abs(speed - self.desired_speed)
 
-    # reward for collision
+    # Reward for collision
     r_collision = 0
-    if len(self.collision_hist) > 0:
-      r_collision = -1
+    if self.collision_detector.get_latest_collision_intensity() is not None:
+        r_collision = -1
 
-    # reward for steering:
+    # Reward for steering:
     r_steer = -self.ego.get_control().steer**2
 
-    # reward for out of lane
+    # Reward for out of lane
     ego_x, ego_y = get_pos(self.ego)
     dis, w = get_lane_dis(self.waypoints, ego_x, ego_y)
     r_out = 0
     if abs(dis) > self.out_lane_thres:
       r_out = -1
 
-    # longitudinal speed
+    # Longitudinal speed
     lspeed = np.array([v.x, v.y])
     lspeed_lon = np.dot(lspeed, w)
 
-    # cost for too fast
+    # Cost for too fast
     r_fast = 0
     if lspeed_lon > self.desired_speed:
       r_fast = -1
 
-    # cost for lateral acceleration
+    # Cost for lateral acceleration
     r_lat = - abs(self.ego.get_control().steer) * lspeed_lon**2
-
     r = 200*r_collision + 5*r_speed + 10*r_fast + 2*r_out + r_steer*5 + 0.2*r_lat - 0.1
 
     return r
@@ -613,7 +599,7 @@ class CarlaEnv(gym.Env):
     ego_x, ego_y = get_pos(self.ego)
 
     # If collides
-    if len(self.collision_hist)>0:
+    if self.collision_detector.get_latest_collision_intensity():
       return True
 
     # If reach maximum timestep

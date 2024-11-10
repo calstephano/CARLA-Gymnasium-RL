@@ -3,11 +3,6 @@
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
 
-# This file utilizes, with modification, LIDAR code from the CARLA Python examples library:
-# Copyright (c) 2020 Computer Vision Center (CVC) at the Universitat Autonoma de Barcelona (UAB).
-# This work is licensed under the terms of the MIT license.
-# For a copy, see <https://opensource.org/licenses/MIT>.
-
 from __future__ import division
 
 import glob
@@ -47,7 +42,7 @@ class CarlaEnv(gym.Env):
   """An OpenAI gym wrapper for CARLA simulator."""
 
   def __init__(self, params):
-    # parameters
+    # Parameters
     self.display_size = params['display_size']  # rendering screen size
     self.max_past_step = params['max_past_step']
     self.number_of_vehicles = params['number_of_vehicles']
@@ -64,9 +59,7 @@ class CarlaEnv(gym.Env):
     self.max_ego_spawn_times = params['max_ego_spawn_times']
     self.display_route = params['display_route']
 
-
-
-    # action and observation spaces
+    # Action and observation spaces
     self.discrete = params['discrete']
     self.discrete_act = [params['discrete_acc'], params['discrete_steer']] # acc, steer
     self.n_acc = len(self.discrete_act[0])
@@ -80,8 +73,8 @@ class CarlaEnv(gym.Env):
 
     self.observation_space = spaces.Box(low=0, high=255, shape=(5, self.obs_size, self.obs_size, 3), dtype=np.float32)
 
-    # Connect to carla server and get world object
-    print('connecting to Carla server...')
+    # Connect to CARLA server and get world object
+    print('Connecting to Carla server...')
     client = carla.Client('localhost', params['port'])
     client.set_timeout(4000.0)
     self.world = client.load_world(params['town'])
@@ -108,19 +101,8 @@ class CarlaEnv(gym.Env):
     self.collision_hist_l = 1 # collision history length
     self.collision_bp = self.world.get_blueprint_library().find('sensor.other.collision')
 
-    # LIDAR sensor
-    self.lidar_data = None
-    self.lidar_height = 1.8
-    self.lidar_trans = carla.Transform(carla.Location(x=-0.5, z=self.lidar_height))
-    self.lidar_bp = self.world.get_blueprint_library().find('sensor.lidar.ray_cast')
-    self.lidar_bp.set_attribute('channels', '64.0')
-    self.lidar_bp.set_attribute('range', '100.0')
-    self.lidar_bp.set_attribute('upper_fov', '15')
-    self.lidar_bp.set_attribute('lower_fov', '-25')
-    self.lidar_bp.set_attribute('rotation_frequency', str(1.0 / 0.05))
-    self.lidar_bp.set_attribute('points_per_second', '500000')
-
-    # Radar sensor
+    # Initialize sensors
+    self.lidar_sensor = LIDARSensor(self.world)
     self.radar_sensor = RadarSensor(self.world)
 
     # Camera sensor
@@ -154,11 +136,11 @@ class CarlaEnv(gym.Env):
   def reset(self, seed = None):
     # Clear sensor objects
     self.collision_sensor = None
-    self.lidar_sensor = None
     self.camera_sensor = None
     self.camera2_sensor = None
     self.camera3_sensor = None
     self.camera4_sensor = None
+    self.lidar_sensor.lidar_sensor = None
     self.radar_sensor.radar_sensor = None
 
     # Delete sensors, vehicles and walkers
@@ -225,32 +207,9 @@ class CarlaEnv(gym.Env):
       if len(self.collision_hist)>self.collision_hist_l:
         self.collision_hist.pop(0)
     self.collision_hist = []
-
-    # Add LIDAR sensor
-    self.lidar_sensor = self.world.spawn_actor(self.lidar_bp, self.lidar_trans, attach_to=self.ego)
-    #self.point_list = o3d.geometry.PointCloud()
-    #self.lidar_sensor.listen(lambda data: get_lidar_data(data, self.point_list))
-    def get_lidar_data(point_cloud, point_list):
-      data = np.copy(np.frombuffer(point_cloud.raw_data, dtype=np.dtype('f4')))
-      data = np.reshape(data, (int(data.shape[0] / 4), 4))
-
-      # Isolate the intensity and compute a color for it
-      intensity = data[:, -1]
-      intensity_col = 1.0 - np.log(intensity) / np.log(np.exp(-0.004 * 100))
-      int_color = np.c_[
-          np.interp(intensity_col, VID_RANGE, VIRIDIS[:, 0]),
-          np.interp(intensity_col, VID_RANGE, VIRIDIS[:, 1]),
-          np.interp(intensity_col, VID_RANGE, VIRIDIS[:, 2])]
-
-      # Isolate the 3D data
-      points = data[:, :-1]
-
-      points[:, :1] = -points[:, :1]
-
-      point_list.points = o3d.utility.Vector3dVector(points)
-      point_list.colors = o3d.utility.Vector3dVector(int_color)
-
-    # Add radar sensor
+    
+    # Spawn and attach sensors
+    self.lidar_sensor.spawn_and_attach(self.ego)
     self.radar_sensor.spawn_and_attach(self.ego)
 
     def run_open3d():

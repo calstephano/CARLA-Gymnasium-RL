@@ -121,13 +121,6 @@ class CarlaEnv(gym.Env):
     self.lidar_bp.set_attribute('points_per_second', '500000')
 
     # Radar sensor
-    # self.radar_data = None
-    # self.radar_bp = self.world.get_blueprint_library().find('sensor.other.radar') # Fetch the blueprint from CARLA's library
-    # self.radar_bp.set_attribute('horizontal_fov', str(35))                        # Set horizontal field of view's angle
-    # self.radar_bp.set_attribute('vertical_fov', str(20))                          # Set vertical field of view's angle
-    # self.radar_bp.set_attribute('range', str(20))                                 # Set detection range (meters)
-    # self.radar_bp.set_attribute('points_per_second', '15000')                     # Set scan frequency (points per second)
-    # self.radar_trans = carla.Transform(carla.Location(x=2.0, z=1.0))              # Set location of sensor relative to vehicle (meters)
     self.radar_sensor = RadarSensor(self.world)
 
     # Camera sensor
@@ -258,35 +251,6 @@ class CarlaEnv(gym.Env):
       point_list.colors = o3d.utility.Vector3dVector(int_color)
 
     # Add radar sensor
-    # self.radar_sensor = self.world.spawn_actor(self.radar_bp, self.radar_trans, attach_to=self.ego)
-    # self.radar_sensor.listen(lambda data: get_radar_data(data))
-    # def get_radar_data(radar_data):
-    #   velocity_range = 7.5 # m/s
-    #   current_rot = radar_data.transform.rotation
-    #   for detect in radar_data:
-    #     azi = math.degrees(detect.azimuth)      # x
-    #     alt = math.degrees(detect.altitude)     # y
-    #     fw_vec = carla.Vector3D(x=detect.depth - 0.25)    # Adjust the distance slightly so the dots can be properly seen
-    #     carla.Transform(
-    #         carla.Location(),
-    #         carla.Rotation(
-    #             pitch=current_rot.pitch + alt,
-    #             yaw=current_rot.yaw + azi,
-    #             roll=current_rot.roll)).transform(fw_vec)
-
-    #     def clamp(min_v, max_v, value):
-    #         return max(min_v, min(value, max_v))
-
-    #     norm_velocity = detect.velocity / velocity_range # range [-1, 1]
-    #     r = int(clamp(0.0, 1.0, 1.0 - norm_velocity) * 255.0)
-    #     g = int(clamp(0.0, 1.0, 1.0 - abs(norm_velocity)) * 255.0)
-    #     b = int(abs(clamp(- 1.0, 0.0, - 1.0 - norm_velocity)) * 255.0)
-    #     self.world.debug.draw_point(
-    #         radar_data.transform.location + fw_vec,
-    #         size=0.075,
-    #         life_time=0.06,
-    #         persistent_lines=False,
-    #         color=carla.Color(r, g, b))
     self.radar_sensor.spawn_and_attach(self.ego)
 
     def run_open3d():

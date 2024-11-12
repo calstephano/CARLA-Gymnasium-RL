@@ -23,10 +23,10 @@ class CameraSensors:
         self.camera_bp.set_attribute('sensor_tick', '0.02')             # Set time (seconds) between sensor captures
         
         # Define transformations for each camera
-        self.camera_trans = carla.Transform(carla.Location(x=1.5, z=1.5))
-        self.camera_trans2 = carla.Transform(carla.Location(x=0.7, y=0.9, z=1), carla.Rotation(pitch=-35.0, yaw=134.0))
-        self.camera_trans3 = carla.Transform(carla.Location(x=0.7, y=-0.9, z=1), carla.Rotation(pitch=-35.0, yaw=-134.0))
-        self.camera_trans4 = carla.Transform(carla.Location(x=-1.5, z=1.5), carla.Rotation(yaw=180.0))
+        self.camera_trans = carla.Transform(carla.Location(x=1.5, z=1.5))                                                   # Front view
+        self.camera_trans2 = carla.Transform(carla.Location(x=0.7, y=0.9, z=1), carla.Rotation(pitch=-35.0, yaw=134.0))     # Diagonal left-backward view
+        self.camera_trans3 = carla.Transform(carla.Location(x=-1.5, z=1.5), carla.Rotation(yaw=180.0))                      # Back view
+        self.camera_trans4 = carla.Transform(carla.Location(x=0.7, y=-0.9, z=1), carla.Rotation(pitch=-35.0, yaw=-134.0))   # Diagonal right-backward
 
     def spawn_and_attach(self, vehicle):
         self.vehicle = vehicle
@@ -56,10 +56,10 @@ class CameraSensors:
         camera = camera.astype(np.float32)
 
         camera_surface = rgb_to_display_surface(camera[0], self.display_size)
-        display.blit(camera_surface, (self.display_size * 3, 0))
+        display.blit(camera_surface, (self.display_size * 2, 0))
 
         camera_surface2 = rgb_to_display_surface(camera[1], self.display_size)
-        display.blit(camera_surface2, (self.display_size * 2, 0))
+        display.blit(camera_surface2, (self.display_size * 3, 0))
 
         camera_surface3 = rgb_to_display_surface(camera[2], self.display_size)
         display.blit(camera_surface3, (self.display_size * 4, 0))

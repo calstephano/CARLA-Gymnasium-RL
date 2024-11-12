@@ -10,7 +10,7 @@ class CameraSensors:
         self.world = world
         self.obs_size = obs_size
         self.display_size = display_size
-        self.camera_img = np.zeros((4, obs_size, obs_size, 3), dtype=np.uint8)     # Placeholder for images from sensors
+        self.camera_img = np.zeros((4, obs_size, obs_size, 3), dtype = np.dtype("uint8"))     # Placeholder for images from sensors
         self.vehicle = None
        
         # Import camera blueprint library from CARLA
@@ -45,7 +45,7 @@ class CameraSensors:
 
     def _get_camera_img(self, data, index):
         # Convert camera data to numpy array and store it
-        array = np.frombuffer(data.raw_data, dtype=np.uint8)
+        array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
         array = np.reshape(array, (data.height, data.width, 4))
         array = array[:, :, :3]
         array = array[:, :, ::-1]
@@ -53,7 +53,7 @@ class CameraSensors:
 
     def display_camera_img(self, display):
         camera = resize(self.camera_img, (4, self.obs_size, self.obs_size, 3)) * 255
-        camera = camera.astype(np.uint8)
+        camera = camera.astype(np.float32)
 
         camera_surface = rgb_to_display_surface(camera[0], self.display_size)
         display.blit(camera_surface, (self.display_size * 3, 0))

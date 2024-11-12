@@ -30,17 +30,14 @@ class LIDARSensor:
         self.lidar_bp.set_attribute('rotation_frequency', str(1.0 / 0.05))
         self.lidar_bp.set_attribute('points_per_second', '500000')
 
-        # Set LIDAR location relative to the vehicle
-        self.lidar_trans = carla.Transform(carla.Location(x=-0.5, z=self.lidar_height))
+        # Initialize the point list for storing 3D points
+        self.point_list = o3d.geometry.PointCloud()
 
     def spawn_and_attach(self, vehicle):
         self.vehicle = vehicle
 
         # Spawn LIDAR sensor and attach it to the vehicle
         self.lidar_sensor = self.world.spawn_actor(self.lidar_bp, self.lidar_trans, attach_to=self.vehicle)
-
-        # Create point list
-        self.point_list = o3d.geometry.PointCloud()
 
         # Listen for data
         self.lidar_sensor.listen(lambda data: self._on_data(data))

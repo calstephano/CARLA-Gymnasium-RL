@@ -23,7 +23,7 @@ class RadarSensor:
     def spawn_and_attach(self, vehicle):
         self.vehicle = vehicle
 
-        # Spawn radar sensor and attach it to the vehicle
+        # Spawn and attach radar sensor to vehicle
         self.radar_sensor = self.world.spawn_actor(self.radar_bp, self.radar_trans, attach_to=self.vehicle)
         
         # Listen for data

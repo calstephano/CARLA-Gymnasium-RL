@@ -11,7 +11,7 @@ class CameraSensors:
         self.obs_size = obs_size
         self.display_size = display_size
         self.cameras = []
-        self.camera_img = np.zeros((4, obs_size, obs_size, 3), dtype = np.dtype("uint8"))     # Placeholder for images from sensors
+        self.camera_img = np.zeros((4, obs_size, obs_size), dtype = np.dtype("uint8"))     # Placeholder for images from sensors
         self.vehicle = None
        
         # Import camera blueprint library from CARLA
@@ -44,12 +44,16 @@ class CameraSensors:
             self.cameras.append(camera)
 
     def _get_camera_img(self, data, index):
-        # Convert camera data to numpy array and store it
-        array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
-        array = np.reshape(array, (data.height, data.width, 4))
-        array = array[:, :, :3]
-        array = array[:, :, ::-1]
+        array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))     # Convert raw data to numpy array
+        array = np.reshape(array, (data.height, data.width, 4))[:, :, :3]   # Reshape to a 2D image with RGB channels (discard Alpha)
+
+        # Pre-processing: Convert to grayscale
+        pil_image = Image.fromarray(array)
+        grayscale_image = pil_image.convert("L")  # "L" mode for grayscale
+        array = np.array(grayscale_image)
+
         self.camera_img[index] = array
+        
 
     def display_camera_img(self, display):
         camera = resize(self.camera_img, (4, self.obs_size, self.obs_size, 3)) * 255
@@ -60,8 +64,3 @@ class CameraSensors:
             display.blit(camera_surface, (self.display_size * (i + 2), 0))
 
         return camera
-
-
-    # TO DO:
-    # - Grayscale
-    # - Mask 

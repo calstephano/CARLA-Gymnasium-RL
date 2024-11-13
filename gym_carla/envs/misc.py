@@ -144,7 +144,6 @@ def get_lane_dis(waypoints, x, y):
   dis = - lv * cross
   return dis, w
 
-
 def get_preview_lane_dis(waypoints, x, y, idx=2):
   """
   Calculate distance from (x, y) to a certain waypoint
@@ -161,7 +160,6 @@ def get_preview_lane_dis(waypoints, x, y, idx=2):
   cross = np.cross(w, vec/lv)
   dis = - lv * cross
   return dis, w
-
 
 def is_within_distance_ahead(target_location, current_location, orientation, max_distance):
   """
@@ -223,6 +221,7 @@ def set_carla_transform(pose):
   transform.rotation.yaw = pose[2]
   return transform
 
+
 def display_to_rgb(display, obs_size):
   """
   Transform image grabbed from pygame display to an rgb image uint8 matrix
@@ -234,6 +233,7 @@ def display_to_rgb(display, obs_size):
   rgb = skimage.transform.resize(rgb, (obs_size, obs_size))  # resize
   rgb = rgb * 255
   return rgb
+
 
 def rgb_to_display_surface(rgb, display_size):
   """
@@ -249,3 +249,16 @@ def rgb_to_display_surface(rgb, display_size):
   pygame.surfarray.blit_array(surface, display)
   return surface
 
+def grayscale_to_display_surface(rgb, display_size):
+  """
+  Generate pygame surface given an rgb image uint8 matrix
+  :param rgb: rgb image uint8 matrix
+  :param display_size: display size
+  :return: pygame surface
+  """
+  surface = pygame.Surface((display_size, display_size)).convert()
+  display = skimage.transform.resize(rgb, (display_size, display_size))
+  display = np.flip(display, axis=1)
+  display = np.rot90(display, 1)
+  pygame.surfarray.blit_array(surface, display)
+  return surface

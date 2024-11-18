@@ -261,6 +261,7 @@ def rgb_to_display_surface(rgb, display_size):
   return surface
 
 
+
 def grayscale_to_display_surface(gray, display_size):
   """
   Convert a grayscale image into a Pygame-compatible surface for rendering
@@ -268,23 +269,21 @@ def grayscale_to_display_surface(gray, display_size):
   Note:
   - The conversion to 3 channels (RGB) is only performed for display purposes as Pygame requires
   RGB/RGBA.
-  - This does not affect efficiency of RL tasks. Grayscale is retained internally for RL 
-  processing to save memory and simplify computations. 
+  - This does not affect efficiency of RL tasks. Grayscale is retained internally for RL
+  processing to save memory and simplify computations.
 
   :param gray: Grayscale image as a NumPy array (uint8 matrix).
   :param display_size: The size (width and height) of the display surface.
   :return: Pygame surface for visualization.
   """
   # Convert grayscale image to RGB (3 channels)
-  camera_rgb = np.stack((gray, gray, gray), axis=2)
+  rgb = np.stack((gray, gray, gray), axis=2)
 
-  # Create a Pygame surface from the RGB image
-  surface = pygame.surfarray.make_surface(camera_rgb)
-
-  # Rotate the surface 90 degrees clockwise for proper orientation
-  surface = pygame.transform.rotate(surface, -90)
-
-  # Resize the surface to match the display size
-  surface = pygame.transform.scale(surface, (display_size, display_size))
-
+  # Follow similar process as in rgb_to_display_surface 
+  surface = pygame.Surface((display_size, display_size)).convert()
+  display = skimage.transform.resize(rgb, (display_size, display_size), preserve_range=True).astype(np.uint8)
+  display = np.flip(display, axis=1)
+  display = np.rot90(display, 1)
+  pygame.surfarray.blit_array(surface, display)
   return surface
+

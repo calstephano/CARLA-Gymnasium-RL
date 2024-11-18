@@ -64,19 +64,21 @@ class CameraSensors:
         camera = camera.astype(np.uint8)
 
         for i in range(4):
-            # Create a pygame surface for grayscale image
-            camera_surface = pygame.surfarray.make_surface(camera[i])
+            # Convert grayscale image to RGB (3 channels)
+            camera_rgb = np.stack((camera[i], camera[i], camera[i]), axis=2)
 
-            # Rotate the surface 90 degrees clockwise
+            # Create a Pygame surface from the RGB image
+            camera_surface = pygame.surfarray.make_surface(camera_rgb)
+
+            # Rotate the surface 90 degrees clockwise for proper orientation
             camera_surface = pygame.transform.rotate(camera_surface, -90)
 
             # Resize the surface to match the display size
             camera_surface = pygame.transform.scale(camera_surface, (self.display_size, self.display_size))
 
-            # Display the surface
+            # Display the surface at the correct position
             display.blit(camera_surface, (self.display_size * (i + 2), 0))
 
         return camera
-
 
 

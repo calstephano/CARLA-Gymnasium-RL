@@ -38,16 +38,39 @@ def main():
   # Set gym-carla environment
   env = gym.make('carla-v0', params=params)
 
-  model = DQN('MlpPolicy', env, verbose=1, tensorboard_log="./tensorboard/")
+  model = DQN('MlpPolicy', env, verbose=1, tensorboard_log="./tensorboard/", buffer_size=500)
   model.learn(total_timesteps=10000)
 
   obs, info = env.reset()
   i = 0
-  while True:
-    action, _states = model.predict(obs)
-    obs, rewards, terminated, truncated, info = env.step(action)
-    print(i)
-    i += 1
+  try:
+    while True:
+        action, _ = model.predict(obs)
+        obs, rewards, terminated, truncated, info = env.step(action)
+        ego_location = ego_vehicle.get_location()
+
+        # Save trajectory
+        trajectories[0].append([ego_location.x, ego_location.y, ego_location.z])
+
+        # Visualize using CarlaViz
+        # painter.draw_polylines(trajectories)
+
+        # Display velocity as overlay
+        ego_velocity = ego_vehicle.get_velocity()
+        velocity_str = f"{ego_velocity.x:.2f}, {ego_velocity.y:.2f}, {ego_velocity.z:.2f}"
+        # painter.draw_texts([velocity_str], [[ego_location.x, ego_location.y, ego_location.z + 10.0]], size=20)
+
+        if terminated or truncated:
+            obs, info = env.reset()
+        i += 1
+
+        time.sleep(0.05)
+  finally:
+    camera.stop()
+    camera.destroy()
+    lidar.stop()
+    lidar.destroy()
+    env.close()
 
 if __name__ == '__main__':
   main()

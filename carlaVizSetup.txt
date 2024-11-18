@@ -1,0 +1,19 @@
+# 1. launch carla simulator
+cd CARLA_SIMULATOR_PATH
+./CarlaUE4.sh
+
+# 2. run the docker image
+# Linux
+docker run -it --network="host" mjxu96/carlaviz:0.9.15 \
+  --simulator_host localhost \
+  --simulator_port 2000
+
+# Windows/MacOS
+docker run -it -p 8080-8081:8080-8081 mjxu96/carlaviz:0.9.15 \
+  --simulator_host host.docker.internal \
+  --simulator_port 2000
+
+# 3. run this script
+python3 example.py
+
+# 4. open your browser and go to localhost:8080

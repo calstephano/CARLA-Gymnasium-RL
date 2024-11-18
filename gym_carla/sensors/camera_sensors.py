@@ -1,4 +1,5 @@
 import carla
+import threading
 import numpy as np
 from skimage.transform import resize
 from PIL import Image
@@ -11,10 +12,9 @@ class CameraSensors:
         self.obs_size = obs_size
         self.display_size = display_size
         self.cameras = []
-        self.camera_img = np.zeros((4, obs_size, obs_size), dtype = np.dtype("uint8"))     # Placeholder for images from sensors
+        self.camera_img = np.zeros((4, obs_size, obs_size), dtype=np.uint8)  # Cache for resized images
         self.vehicle = None
-
-        self.past_img = []
+        self.lock = threading.Lock()
 
         # Import camera blueprint library from CARLA
         self.camera_bp = world.get_blueprint_library().find('sensor.camera.rgb')
@@ -46,27 +46,24 @@ class CameraSensors:
             self.cameras.append(camera)
 
     def _get_camera_img(self, data, index):
-        array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))     # Convert raw data to numpy array
-        array = np.reshape(array, (data.height, data.width, 4))[:, :, :3]   # Reshape to a 2D image with RGB channels (discard Alpha)
-
-        # Pre-processing: Convert to grayscale
+        # Convert raw data to numpy array and reshape to a 2D image with RGB channels
+        array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
+        array = np.reshape(array, (data.height, data.width, 4))[:, :, :3]
+        
+        # Convert to grayscale
         array = np.mean(array, axis=2).astype(np.uint8)
-        self.camera_img[0] = array
-        while len(self.past_img) < 3:
-            self.past_img.append(array)
-        for i in range(3):
-            self.camera_img[i+1] = self.past_img[i]
-        self.past_img.pop()
-        self.past_img.insert(0, array)
+
+        # Resize the grayscale image to the observation size
+        resized_array = resize(array, (self.obs_size, self.obs_size), preserve_range=True).astype(np.uint8)
+        
+        # Safely update the corresponding index in the cache
+        with self.lock:
+            self.camera_img[index] = resized_array
 
     def display_camera_img(self, display):
-        camera = resize(self.camera_img, (4, self.obs_size, self.obs_size), preserve_range=True)
-        camera = camera.astype(np.uint8)
-
-        for i in range(4):
-            camera_surface = grayscale_to_display_surface(camera[i], self.display_size)
-            display.blit(camera_surface, (self.display_size * (i + 2), 0))
-
-        return camera
-
-
+        with self.lock:
+            for i in range(4):
+                camera_surface = grayscale_to_display_surface(self.camera_img[i], self.display_size)
+                display.blit(camera_surface, (self.display_size * (i + 2), 0))
+        pygame.display.flip()
+        return self.camera_img

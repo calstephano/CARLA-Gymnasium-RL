@@ -261,7 +261,6 @@ def rgb_to_display_surface(rgb, display_size):
   return surface
 
 
-
 def grayscale_to_display_surface(gray, display_size):
   """
   Convert a grayscale image into a Pygame-compatible surface for rendering

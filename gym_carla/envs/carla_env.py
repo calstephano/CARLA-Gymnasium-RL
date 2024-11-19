@@ -5,12 +5,8 @@
 
 from __future__ import division
 
-import glob
-import os
 import sys
-import math
 import open3d as o3d
-import copy
 import numpy as np
 import pygame
 import random
@@ -27,18 +23,12 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 import carla
 
+# Local module imports
 from gym_carla.envs.render import BirdeyeRender
 from gym_carla.envs.route_planner import RoutePlanner
 from gym_carla.envs.misc import *
+from gym_carla.sensors import CollisionDetector, CameraSensors, LIDARSensor, RadarSensor
 
-# Import sensors
-from gym_carla.sensors.collision_detector import CollisionDetector
-from gym_carla.sensors.camera_sensors import CameraSensors
-from gym_carla.sensors.lidar_sensor import LIDARSensor
-from gym_carla.sensors.radar_sensor import RadarSensor
-
-VIRIDIS = np.array(cm.get_cmap('plasma').colors)
-VID_RANGE = np.linspace(0.0, 1.0, VIRIDIS.shape[0])
 class CarlaEnv(gym.Env):
   """An OpenAI gym wrapper for CARLA simulator."""
 
@@ -80,11 +70,11 @@ class CarlaEnv(gym.Env):
     )
 
     # Connect to CARLA server and get world object
-    print('Connecting to Carla server...')
+    print('Connecting to CARLA server...')
     client = carla.Client('localhost', params['port'])
     client.set_timeout(4000.0)
     self.world = client.load_world(params['town'])
-    print('Carla server connected!')
+    print('CARLA server connected!')
 
     # Set weather
     self.world.set_weather(carla.WeatherParameters.ClearNoon)
@@ -122,15 +112,16 @@ class CarlaEnv(gym.Env):
   def reset(self, seed = None, options = None):
     # Clear sensor objects
     self.collision_detector.collision_detector = None
-    self.camera_sensors.camera_sensor = None
-    self.camera_sensors.camera_sensor2 = None
-    self.camera_sensors.camera_sensor3 = None
-    self.camera_sensors.camera_sensor4 = None
+    self.camera_sensors.camera_sensors = None
     self.lidar_sensor.lidar_sensor = None
     self.radar_sensor.radar_sensor = None
 
     # Delete sensors, vehicles and walkers
-    self._clear_all_actors(['sensor.other.collision', 'sensor.lidar.ray_cast', 'sensor.camera.rgb', 'vehicle.*', 'controller.ai.walker', 'walker.*'])
+    self._clear_all_actors([
+      'sensor.other.collision', 'sensor.camera.rgb', 
+      'sensor.other.radar', 'sensor.lidar.ray_cast',
+      'vehicle.*', 'controller.ai.walker', 'walker.*'
+    ])
 
     # Disable sync mode
     self._set_synchronous_mode(False)

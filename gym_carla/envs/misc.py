@@ -4,7 +4,7 @@
 #
 # This file is modified from <https://github.com/carla-simulator/carla>:
 # Copyright (c) 2018 Intel Labs.
-# authors: German Ros (german.ros@intel.com)
+# Authors: German Ros (german.ros@intel.com)
 #
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
@@ -246,43 +246,35 @@ def display_to_rgb(display, obs_size):
 
 
 def rgb_to_display_surface(rgb, display_size):
-  """
-  Generate pygame surface given an rgb image uint8 matrix
+    """
+    Generate pygame surface given an RGB image uint8 matrix.
 
-  :param rgb: rgb image uint8 matrix
-  :param display_size: display size
-  :return: pygame surface
-  """
-  surface = pygame.Surface((display_size, display_size)).convert()
-  display = skimage.transform.resize(rgb, (display_size, display_size))
-  display = np.flip(display, axis=1)
-  display = np.rot90(display, 1)
-  pygame.surfarray.blit_array(surface, display)
-  return surface
+    :param rgb: RGB image uint8 matrix.
+    :param display_size: Display size.
+    :return: Pygame surface.
+    """
+    surface = pygame.Surface((display_size, display_size)).convert()
+    display = skimage.transform.resize(rgb, (display_size, display_size), preserve_range=True).astype(np.uint8)
+    display = np.flip(display, axis=1)
+    display = np.rot90(display, 1)
+    pygame.surfarray.blit_array(surface, display)
+    return surface
 
 
 def grayscale_to_display_surface(gray, display_size):
-  """
-  Convert a grayscale image into a Pygame-compatible surface for rendering
+    """
+    Convert a grayscale image into a Pygame-compatible surface for rendering.
 
-  Note:
-  - The conversion to 3 channels (RGB) is only performed for display purposes as Pygame requires
-  RGB/RGBA.
-  - This does not affect efficiency of RL tasks. Grayscale is retained internally for RL
-  processing to save memory and simplify computations.
+    Note:
+    - Grayscale is converted to RGB (3 channels) for visualization purposes only (Pygame requirement)
+    - This does not impact RL tasks, where grayscale is retained internally for efficiency.
 
-  :param gray: Grayscale image as a NumPy array (uint8 matrix).
-  :param display_size: The size (width and height) of the display surface.
-  :return: Pygame surface for visualization.
-  """
-  # Convert grayscale image to RGB (3 channels)
-  rgb = np.stack((gray, gray, gray), axis=2)
+    :param gray: Grayscale image as a NumPy array (uint8 matrix).
+    :param display_size: Display size.
+    :return: Pygame surface.
+    """
+    # Convert grayscale to RGB (3 channels)
+    rgb = np.stack((gray, gray, gray), axis=2)
 
-  # Follow similar process as in rgb_to_display_surface 
-  surface = pygame.Surface((display_size, display_size)).convert()
-  display = skimage.transform.resize(rgb, (display_size, display_size), preserve_range=True).astype(np.uint8)
-  display = np.flip(display, axis=1)
-  display = np.rot90(display, 1)
-  pygame.surfarray.blit_array(surface, display)
-  return surface
-
+    # Render through rgb_to_display_surface function
+    return rgb_to_display_surface(rgb, display_size)

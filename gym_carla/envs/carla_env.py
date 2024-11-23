@@ -64,7 +64,7 @@ class CarlaEnv(gym.Env):
 
     # Observation space
     self.observation_space = spaces.Box(
-      low=0, high=255, 
+      low=0, high=255,
       shape=(4, self.obs_size, self.obs_size),
       dtype=np.uint8
     )
@@ -110,21 +110,34 @@ class CarlaEnv(gym.Env):
     self._init_renderer()
 
   def reset(self, seed = None, options = None):
-    # Clear sensor objects
-    self.collision_detector.collision_detector = None
-    self.camera_sensors.camera_sensors = None
-    self.lidar_sensor.lidar_sensor = None
-    self.radar_sensor.radar_sensor = None
+
+
+    # Disable sync mode
+    self._set_synchronous_mode(False)
 
     # Delete sensors, vehicles and walkers
     self._clear_all_actors([
-      'sensor.other.collision', 'sensor.camera.rgb', 
+      'sensor.other.collision', 'sensor.camera.rgb',
       'sensor.other.radar', 'sensor.lidar.ray_cast',
       'vehicle.*', 'controller.ai.walker', 'walker.*'
     ])
 
-    # Disable sync mode
-    self._set_synchronous_mode(False)
+
+    # Clear sensor objects
+    self.collision_detector.collision_detector = None
+    self.camera_sensors.camera_sensors = None
+    #self.lidar_sensor.lidar_sensor = None
+    #self.radar_sensor.radar_sensor = None
+
+    # Check for sensors still in CARLA
+    lingering_sensors = [actor for actor in self.world.get_actors() if 'sensor.' in actor.type_id]
+    if lingering_sensors:
+        print(f"Lingering sensors detected: {len(lingering_sensors)}")
+        for sensor in lingering_sensors:
+            print(f"Sensor Type: {sensor.type_id}, ID: {sensor.id}")
+            if sensor.is_alive:
+                print(f"Sensor {sensor.id} is still alive. Attempting to destroy.")
+                sensor.destroy()
 
     # Spawn surrounding vehicles
     random.shuffle(self.vehicle_spawn_points)
@@ -176,9 +189,12 @@ class CarlaEnv(gym.Env):
 
     # Spawn and attach sensors
     self.collision_detector.spawn_and_attach(self.ego)
+    print(f"Created collision detector: {self.collision_detector.collision_detector.id}")
+
     self.camera_sensors.spawn_and_attach(self.ego)
-    self.lidar_sensor.spawn_and_attach(self.ego)
-    self.radar_sensor.spawn_and_attach(self.ego)
+
+    #self.lidar_sensor.spawn_and_attach(self.ego)
+    #self.radar_sensor.spawn_and_attach(self.ego)
 
     def run_open3d():
       self.vis = o3d.visualization.Visualizer()
@@ -475,7 +491,7 @@ class CarlaEnv(gym.Env):
       # 'lidar':lidar_arr,
       'birdeye':birdeye.astype(np.uint8)
     }
-    
+
     return (obs['camera'])
 
   def _get_reward(self):
@@ -537,13 +553,18 @@ class CarlaEnv(gym.Env):
     return False
 
   def _clear_all_actors(self, actor_filters):
-    """Clear specific actors."""
-    for actor_filter in actor_filters:
-      for actor in self.world.get_actors().filter(actor_filter):
-        if actor.is_alive:
-          if actor.type_id == 'controller.ai.walker':
-            actor.stop()
-          actor.destroy()
+      """Clear specific actors."""
+      for actor_filter in actor_filters:
+          for actor in self.world.get_actors().filter(actor_filter):
+              if actor.is_alive:
+                  print(f"Attempting to destroy actor: {actor.type_id}, ID: {actor.id}")
+                  if actor.type_id == 'controller.ai.walker':
+                      actor.stop()
+                  try:
+                      actor.destroy()
+                      print(f"Successfully destroyed actor: {actor.type_id}, ID: {actor.id}")
+                  except Exception as e:
+                      print(f"Error destroying actor {actor.type_id}, ID: {actor.id}: {e}")
 
   def _get_info(self):
     self.waypoints, _, self.vehicle_front = self.routeplanner.run_step()

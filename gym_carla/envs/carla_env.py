@@ -110,8 +110,6 @@ class CarlaEnv(gym.Env):
     self._init_renderer()
 
   def reset(self, seed = None, options = None):
-
-
     # Disable sync mode
     self._set_synchronous_mode(False)
 
@@ -121,7 +119,6 @@ class CarlaEnv(gym.Env):
       'sensor.other.radar', 'sensor.lidar.ray_cast',
       'vehicle.*', 'controller.ai.walker', 'walker.*'
     ])
-
 
     # Clear sensor objects
     self.collision_detector.collision_detector = None
@@ -189,8 +186,6 @@ class CarlaEnv(gym.Env):
 
     # Spawn and attach sensors
     self.collision_detector.spawn_and_attach(self.ego)
-    print(f"Created collision detector: {self.collision_detector.collision_detector.id}")
-
     self.camera_sensors.spawn_and_attach(self.ego)
 
     #self.lidar_sensor.spawn_and_attach(self.ego)
@@ -557,12 +552,10 @@ class CarlaEnv(gym.Env):
       for actor_filter in actor_filters:
           for actor in self.world.get_actors().filter(actor_filter):
               if actor.is_alive:
-                  print(f"Attempting to destroy actor: {actor.type_id}, ID: {actor.id}")
                   if actor.type_id == 'controller.ai.walker':
                       actor.stop()
                   try:
                       actor.destroy()
-                      print(f"Successfully destroyed actor: {actor.type_id}, ID: {actor.id}")
                   except Exception as e:
                       print(f"Error destroying actor {actor.type_id}, ID: {actor.id}: {e}")
 

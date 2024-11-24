@@ -5,49 +5,88 @@
 
 import gymnasium as gym
 import gym_carla
-import carla
-from stable_baselines3 import DQN
+from stable_baselines3 import DQN, PPO, SAC
 
 def main():
-  # parameters for the gym_carla environment
+  # Define environment parameters
   params = {
     'number_of_vehicles': 1,
     'number_of_walkers': 0,
-    'display_size': 256,  # screen size of bird-eye render
-    'max_past_step': 1,  # the number of past steps to draw
-    'dt': 0.1,  # time interval between two frames
-    'discrete': True,  # whether to use discrete control space
-    'discrete_acc': [-3.0, 0.0, 3.0],  # discrete value of accelerations
-    'discrete_steer': [-0.2, 0.0, 0.2],  # discrete value of steering angles
-    'continuous_accel_range': [-3.0, 3.0],  # continuous acceleration range
-    'continuous_steer_range': [-0.3, 0.3],  # continuous steering angle range
-    'ego_vehicle_filter': 'vehicle.lincoln*',  # filter for defining ego vehicle
-    'port': 2000,  # connection port
-    'town': 'Town03',  # which town to simulate
-    'max_time_episode': 1000,  # maximum timesteps per episode
-    'max_waypt': 12,  # maximum number of waypoints
-    'obs_range': 32,  # observation range (meter)
-    'lidar_bin': 0.125,  # bin size of lidar sensor (meter)
-    'd_behind': 12,  # distance behind the ego vehicle (meter)
-    'out_lane_thres': 2.0,  # threshold for out of lane
-    'desired_speed': 8,  # desired speed (m/s)
-    'max_ego_spawn_times': 200,  # maximum times to spawn ego vehicle
-    'display_route': True,  # whether to render the desired route
+    'display_size': 256,                        # Screen size
+    'max_past_step': 1,                         # The number of past steps to draw
+    'dt': 0.1,                                  # Time interval between two frames
+    'discrete': True,                           # Whether to use discrete control space
+    'discrete_acc': [-3.0, 0.0, 3.0],           # Discrete value of accelerations
+    'discrete_steer': [-0.2, 0.0, 0.2],         # Discrete value of steering angles
+    'continuous_accel_range': [-3.0, 3.0],      # Continuous acceleration range
+    'continuous_steer_range': [-0.3, 0.3],      # Continuous steering angle range
+    'ego_vehicle_filter': 'vehicle.lincoln*',   # Filter for defining ego vehicle
+    'port': 2000,                               # Connection port
+    'town': 'Town03',                           # Which town to simulate
+    'max_time_episode': 1000,                   # Maximum timesteps per episode
+    'max_waypt': 12,                            # Maximum number of waypoints
+    'obs_range': 32,                            # Observation range (meter)
+    'lidar_bin': 0.125,                         # Bin size of LIDAR sensor (meter)
+    'd_behind': 12,                             # Distance behind the ego vehicle (meter)
+    'out_lane_thres': 2.0,                      # Threshold for out of lane
+    'desired_speed': 8,                         # Desired speed (m/s)
+    'max_ego_spawn_times': 200,                 # Maximum times to spawn ego vehicle
+    'display_route': True,                      # Whether to render the desired route
   }
 
-  # Set gym-carla environment
+  # Ask the user to select the training algorithm
+  print("\nSelect the training algorithm:")
+  print("1. Deep Q-Network (DQN)")
+  print("2. Soft Actor-Critic (SAC)")
+  print("3. Proximal Policy Optimization (PPO)")
+  model_input = input("Enter the model number (1, 2, or 3): ").strip()
+
+  if model_input == "1":
+    model_type = 'DQN'
+    params['discrete'] = True
+  elif model_input == "2":
+    model_type = 'SAC'
+    params['discrete'] = False
+  elif model_input == "3":
+    model_type = 'PPO'
+    params['discrete'] = False
+  else:
+    print("Invalid input. Defaulting to DQN.")
+    model_type = 'DQN'
+
+  # Initialize the environment
   env = gym.make('carla-v0', params=params)
 
-  model = DQN('CnnPolicy', env, verbose=1, tensorboard_log="./tensorboard/", buffer_size=50_000)
+  # Initialize the model
+  model = select_model(env, model_type, 'CnnPolicy', verbose=1, tensorboard_log=f"./tensorboard/{model_type}/")
+
+  # Train the model
   model.learn(total_timesteps=10000)
 
+  # Test the model
+  test_model(model, env)
+
+def select_model(env, model_type, policy_type, **kwargs):
+  """Select the appropriate model based on the user's choice."""
+  if model_type == 'DQN':
+    return DQN(policy_type, env, buffer_size=50_000, **kwargs)
+  elif model_type == 'SAC':
+    return SAC(policy_type, env, buffer_size=50_000, **kwargs)
+  elif model_type == 'PPO':
+    return PPO(policy_type, env, **kwargs)
+  else:
+    raise ValueError(f"Unsupported model type: {model_type}")
+
+def test_model(model, env, steps=100):
+  """Test the trained model."""
   obs, info = env.reset()
-  i = 0
-  while True:
+  for step in range(steps):
     action, _states = model.predict(obs)
     obs, rewards, terminated, truncated, info = env.step(action)
-    print(i)
-    i += 1
+    print(f"Step: {step}, Reward: {rewards}")
+    if terminated or truncated:
+      print("Episode finished.")
+      break
 
 if __name__ == '__main__':
   main()

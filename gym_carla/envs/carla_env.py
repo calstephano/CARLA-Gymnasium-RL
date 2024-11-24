@@ -196,23 +196,23 @@ class CarlaEnv(gym.Env):
     #self.lidar_sensor.spawn_and_attach(self.ego)
     #self.radar_sensor.spawn_and_attach(self.ego)
 
-    def run_open3d():
-      self.vis = o3d.visualization.Visualizer()
-      self.vis.create_window(
-          window_name='Carla Lidar',
-          width=540,
-          height=540,
-          left=480,
-          top=270, visible=False)
-      self.vis.get_render_option().background_color = [0.05, 0.05, 0.05]
-      self.vis.get_render_option().point_size = 1
-      self.vis.get_render_option().show_coordinate_frame = True
-
-      self.frame = 0
-      self.dt0 = datetime.now()
-
-    thread_open3d = threading.Thread(target=run_open3d)
-    thread_open3d.start()
+    # def run_open3d():
+    #   self.vis = o3d.visualization.Visualizer()
+    #   self.vis.create_window(
+    #       window_name='Carla Lidar',
+    #       width=540,
+    #       height=540,
+    #       left=480,
+    #       top=270, visible=False)
+    #   self.vis.get_render_option().background_color = [0.05, 0.05, 0.05]
+    #   self.vis.get_render_option().point_size = 1
+    #   self.vis.get_render_option().show_coordinate_frame = True
+    #
+    #   self.frame = 0
+    #   self.dt0 = datetime.now()
+    #
+    # thread_open3d = threading.Thread(target=run_open3d)
+    # thread_open3d.start()
 
     # Update timesteps
     self.time_step=0
@@ -270,11 +270,11 @@ class CarlaEnv(gym.Env):
 
     self.world.tick()
 
-    process_time = datetime.now() - self.dt0
-    sys.stdout.write('\r' + 'FPS: ' + str(1.0 / process_time.total_seconds()))
-    sys.stdout.flush()
+    # process_time = datetime.now() - self.dt0
+    #sys.stdout.write('\r' + 'FPS: ' + str(1.0 / process_time.total_seconds()))
+    #sys.stdout.flush()
     #self.dt0 = datetime.now()
-    self.frame += 1
+    #self.frame += 1
 
     # Append actors polygon list
     vehicle_poly_dict = self._get_actor_polygons('vehicle.*')

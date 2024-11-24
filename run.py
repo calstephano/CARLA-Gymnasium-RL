@@ -38,7 +38,7 @@ def main():
   # Set gym-carla environment
   env = gym.make('carla-v0', params=params)
 
-  model = DQN('MlpPolicy', env, verbose=1, tensorboard_log="./tensorboard/")
+  model = DQN('CnnPolicy', env, verbose=1, tensorboard_log="./tensorboard/", buffer_size=50_000)
   model.learn(total_timesteps=10000)
 
   obs, info = env.reset()

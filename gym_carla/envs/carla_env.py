@@ -27,6 +27,7 @@ import carla
 from gym_carla.envs.render import BirdeyeRender
 from gym_carla.envs.route_planner import RoutePlanner
 from gym_carla.envs.misc import *
+from gym_carla.envs.actor_manager import *
 from gym_carla.sensors import CollisionDetector, CameraSensors, LIDARSensor, RadarSensor
 
 class CarlaEnv(gym.Env):
@@ -149,18 +150,8 @@ class CarlaEnv(gym.Env):
       if self._try_spawn_random_vehicle_at(random.choice(self.vehicle_spawn_points), number_of_wheels=[4]):
         count -= 1
 
-    # Spawn pedestrians
-    random.shuffle(self.walker_spawn_points)
-    count = self.number_of_walkers
-    if count > 0:
-      for spawn_point in self.walker_spawn_points:
-        if self._try_spawn_random_walker_at(spawn_point):
-          count -= 1
-        if count <= 0:
-          break
-    while count > 0:
-      if self._try_spawn_random_walker_at(random.choice(self.walker_spawn_points)):
-        count -= 1
+    walkers_count = spawn_walkers(self.world, self.walker_spawn_points, self.number_of_walkers)
+    print(f"Successfully spawned {walkers_count} walkers.")
 
     # Get actors polygon list
     self.vehicle_polygons = []
@@ -361,34 +352,7 @@ class CarlaEnv(gym.Env):
       vehicle.set_autopilot(enabled=True, tm_port=4050)
       return True
     return False
-
-  def _try_spawn_random_walker_at(self, transform):
-    """Try to spawn a walker at specific transform with random bluprint.
-
-    Args:
-      transform: the carla transform object.
-
-    Returns:
-      Bool indicating whether the spawn is successful.
-    """
-    walker_bp = random.choice(self.world.get_blueprint_library().filter('walker.*'))
-    # set as not invencible
-    if walker_bp.has_attribute('is_invincible'):
-      walker_bp.set_attribute('is_invincible', 'false')
-    walker_actor = self.world.try_spawn_actor(walker_bp, transform)
-
-    if walker_actor is not None:
-      walker_controller_bp = self.world.get_blueprint_library().find('controller.ai.walker')
-      walker_controller_actor = self.world.spawn_actor(walker_controller_bp, carla.Transform(), walker_actor)
-      # start walker
-      walker_controller_actor.start()
-      # set walk to random point
-      walker_controller_actor.go_to_location(self.world.get_random_location_from_navigation())
-      # random max speed
-      walker_controller_actor.set_max_speed(1 + random.random())    # max speed between 1 and 2 (default is 1.4 m/s)
-      return True
-    return False
-
+  
   def _try_spawn_ego_vehicle_at(self, transform):
     """Try to spawn the ego vehicle at specific transform.
     Args:

@@ -27,7 +27,7 @@ import carla
 from gym_carla.envs.render import BirdeyeRender
 from gym_carla.envs.route_planner import RoutePlanner
 from gym_carla.envs.misc import *
-from gym_carla.envs.actor_manager import *
+from gym_carla.primary_actors import *
 from gym_carla.sensors import CollisionDetector, CameraSensors, LIDARSensor, RadarSensor
 
 class CarlaEnv(gym.Env):
@@ -151,7 +151,7 @@ class CarlaEnv(gym.Env):
         count -= 1
 
     walkers_count = spawn_walkers(self.world, self.walker_spawn_points, self.number_of_walkers)
-    print(f"Successfully spawned {walkers_count} walkers.")
+    print(f"Successfully spawned {walkers_count} out of {self.number_of_walkers} walkers.")
 
     # Get actors polygon list
     self.vehicle_polygons = []

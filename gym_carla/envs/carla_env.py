@@ -80,15 +80,10 @@ class CarlaEnv(gym.Env):
     # Set weather
     self.world.set_weather(carla.WeatherParameters.ClearNoon)
 
-    # Get surrounding vehicle spawn points (pre-defined)
-    self.vehicle_spawn_points = get_vehicle_spawn_points(self.world)
-    if self.vehicle_spawn_points:
-        print(f"Successfully retrieved {len(self.vehicle_spawn_points)} vehicle spawn points.")
-        print(f"Example spawn points: {self.vehicle_spawn_points[:3]}")
-    else:
-        print("No vehicle spawn points found!")
-    
-    # Generate pedestrian spawn points
+    # Get spawn points
+    self.vehicle_spawn_points = list(self.world.get_map().get_spawn_points())
+    print(f"Retrieved {len(self.vehicle_spawn_points)} vehicle spawn points.")
+
     self.walker_spawn_points = generate_walker_spawn_points(self.world, self.number_of_walkers)
     print(f"Generated {len(self.walker_spawn_points)} valid walker spawn points out of {self.number_of_walkers} requested.")
 
@@ -129,8 +124,28 @@ class CarlaEnv(gym.Env):
     #self.lidar_sensor.lidar_sensor = None
     #self.radar_sensor.radar_sensor = None
 
-    vehicles_spawned = spawn_vehicles(self.world, self.vehicle_spawn_points, self.number_of_vehicles)
-    print(f"Successfully spawned {vehicles_spawned} vehicles out of {self.number_of_vehicles} requested.")
+    # Spawn surrounding vehicles
+    random.shuffle(self.vehicle_spawn_points)
+    count = self.number_of_vehicles
+    if count > 0:
+        for spawn_point in self.vehicle_spawn_points:
+            print(f"Attempting to spawn vehicle at {spawn_point.location}.")
+            if self._try_spawn_random_vehicle_at(spawn_point, number_of_wheels=[4]):
+                print(f"Successfully spawned vehicle at {spawn_point.location}.")
+                count -= 1
+            else:
+                print(f"Failed to spawn vehicle at {spawn_point.location}.")
+            if count <= 0:
+                break
+    while count > 0:
+        spawn_point = random.choice(self.vehicle_spawn_points)
+        print(f"Attempting to spawn vehicle at {spawn_point.location}.")
+        if self._try_spawn_random_vehicle_at(spawn_point, number_of_wheels=[4]):
+            print(f"Successfully spawned vehicle at {spawn_point.location}.")
+            count -= 1
+        else:
+            print(f"Failed to spawn vehicle at {spawn_point.location}.")
+    print(f"Successfully spawned {self.number_of_vehicles - count} out of {self.number_of_vehicles} requested.")
 
     walkers_spawned = spawn_walkers(self.world, self.walker_spawn_points, self.number_of_walkers)
     print(f"Successfully spawned {walkers_spawned} out of {self.number_of_walkers} walkers.")
@@ -317,6 +332,23 @@ class CarlaEnv(gym.Env):
     """
     self.settings.synchronous_mode = synchronous
     self.world.apply_settings(self.settings)
+
+  def _try_spawn_random_vehicle_at(self, transform, number_of_wheels=[4]):
+    """Try to spawn a surrounding vehicle at specific transform with random bluprint.
+
+    Args:
+      transform: the carla transform object.
+
+    Returns:
+      Bool indicating whether the spawn is successful.
+    """
+    blueprint = self._create_vehicle_bluepprint('vehicle.*', number_of_wheels=number_of_wheels)
+    blueprint.set_attribute('role_name', 'autopilot')
+    vehicle = self.world.try_spawn_actor(blueprint, transform)
+    if vehicle is not None:
+      vehicle.set_autopilot(enabled=True, tm_port=4050)
+      return True
+    return False
 
   def _try_spawn_ego_vehicle_at(self, transform):
     """Try to spawn the ego vehicle at specific transform.

@@ -18,9 +18,16 @@ def generate_walker_spawn_points(world, number_of_walkers):
     for i in range(number_of_walkers):
         spawn_point = carla.Transform()
         loc = world.get_random_location_from_navigation()
-        if (loc != None):
-            spawn_point.location = loc
-            walker_spawn_points.append(spawn_point)
+        if loc is not None:
+            if not (np.isnan(loc.x) or np.isnan(loc.y) or np.isnan(loc.z)):
+                print(f"Valid location: {loc}")
+                spawn_point.location = loc
+                walker_spawn_points.append(spawn_point)
+            else:
+                print("Location contains NaN values!")
+        else:
+            print("No location returned (None).")
+            
     return walker_spawn_points
 
 

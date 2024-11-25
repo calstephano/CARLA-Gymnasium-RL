@@ -11,7 +11,7 @@ def main():
   # Define environment parameters
   params = {
     'number_of_vehicles': 1,
-    'number_of_walkers': 0,
+    'number_of_walkers': 5,
     'display_size': 256,                        # Screen size
     'max_past_step': 1,                         # The number of past steps to draw
     'dt': 0.1,                                  # Time interval between two frames

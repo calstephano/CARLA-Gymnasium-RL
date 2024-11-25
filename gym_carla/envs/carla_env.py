@@ -82,13 +82,8 @@ class CarlaEnv(gym.Env):
 
     # Get spawn points
     self.vehicle_spawn_points = list(self.world.get_map().get_spawn_points())
-    self.walker_spawn_points = []
-    for i in range(self.number_of_walkers):
-      spawn_point = carla.Transform()
-      loc = self.world.get_random_location_from_navigation()
-      if (loc != None):
-        spawn_point.location = loc
-        self.walker_spawn_points.append(spawn_point)
+    self.walker_spawn_points = generate_walker_spawn_points(self.world, self.number_of_walkers)
+    print(f"Generated {len(self.walker_spawn_points)} valid walker spawn points out of {self.number_of_walkers} requested.")
 
     # Create the ego vehicle blueprint
     self.ego_bp = self._create_vehicle_bluepprint(params['ego_vehicle_filter'], color='49,8,8')
@@ -352,7 +347,7 @@ class CarlaEnv(gym.Env):
       vehicle.set_autopilot(enabled=True, tm_port=4050)
       return True
     return False
-  
+
   def _try_spawn_ego_vehicle_at(self, transform):
     """Try to spawn the ego vehicle at specific transform.
     Args:

@@ -3,6 +3,27 @@ import numpy as np
 import carla
 
 
+def generate_walker_spawn_points(world, number_of_walkers):
+    """
+    Generate spawn points for walkers based on navigation locations in the CARLA world.
+
+    Args:
+        world (carla.World): The CARLA simulation world.
+        number_of_walkers (int): The number of walker spawn points to generate.
+
+    Returns:
+        list: A list of carla.Transform objects representing valid walker spawn points.
+    """
+    walker_spawn_points = []
+    for i in range(number_of_walkers):
+        spawn_point = carla.Transform()
+        loc = world.get_random_location_from_navigation()
+        if (loc != None):
+            spawn_point.location = loc
+            walker_spawn_points.append(spawn_point)
+    return walker_spawn_points
+
+
 def try_spawn_random_walker_at(world, transform):
     """Try to spawn a walker at specific transform with random blueprint.
 

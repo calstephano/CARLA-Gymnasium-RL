@@ -412,7 +412,7 @@ class CarlaEnv(gym.Env):
     """Get the observations."""
     # Birdeye rendering
     self.birdeye_render.vehicle_polygons = self.vehicle_polygons
-    self.birdeye_render.walker_polygons = self.walker_polygons
+    #self.birdeye_render.walker_polygons = self.walker_polygons
     self.birdeye_render.waypoints = self.waypoints
 
     # Birdeye view with roadmap and actors

@@ -254,7 +254,7 @@ class CarlaEnv(gym.Env):
     while len(self.walker_polygons) > self.max_past_step:
       self.walker_polygons.pop(0)
 
-    # route planner
+    # Route planner
     self.waypoints, _, self.vehicle_front = self.routeplanner.run_step()
 
     info = self._get_info()
@@ -410,16 +410,19 @@ class CarlaEnv(gym.Env):
 
     # If collides
     if self.collision_detector.get_latest_collision_intensity():
-      return True
+        print("[DEBUG] Termination due to collision.")
+        return True
 
-    # If reach maximum timestep
-    if self.time_step>self.max_time_episode:
-      return True
+    # If reaches maximum timestep
+    if self.time_step > self.max_time_episode:
+        print("[DEBUG] Termination due to max time step.")
+        return True
 
     # If out of lane
     dis, _ = get_lane_dis(self.waypoints, ego_x, ego_y)
     if abs(dis) > self.out_lane_thres:
-      return True
+        print(f"[DEBUG] Termination due to out of lane. Distance: {dis}")
+        return True
 
     return False
 

@@ -272,26 +272,6 @@ class CarlaEnv(gym.Env):
     self.np_random, seed = seeding.np_random(seed)
     return [seed]
 
-  def _create_vehicle_bluepprint(self, actor_filter, color=None, number_of_wheels=[4]):
-    """Create the blueprint for a specific actor type.
-
-    Args:
-      actor_filter: a string indicating the actor type, e.g, 'vehicle.lincoln*'.
-
-    Returns:
-      bp: the blueprint object of carla.
-    """
-    blueprints = self.world.get_blueprint_library().filter(actor_filter)
-    blueprint_library = []
-    for nw in number_of_wheels:
-      blueprint_library = blueprint_library + [x for x in blueprints if int(x.get_attribute('number_of_wheels')) == nw]
-    bp = random.choice(blueprint_library)
-    if bp.has_attribute('color'):
-      if not color:
-        color = random.choice(bp.get_attribute('color').recommended_values)
-      bp.set_attribute('color', color)
-    return bp
-
   def _init_renderer(self):
     """Initialize the birdeye view renderer.
     """
@@ -314,23 +294,6 @@ class CarlaEnv(gym.Env):
     """
     self.settings.synchronous_mode = synchronous
     self.world.apply_settings(self.settings)
-
-  def _try_spawn_random_vehicle_at(self, transform, number_of_wheels=[4]):
-    """Try to spawn a surrounding vehicle at specific transform with random bluprint.
-
-    Args:
-      transform: the carla transform object.
-
-    Returns:
-      Bool indicating whether the spawn is successful.
-    """
-    blueprint = self._create_vehicle_bluepprint('vehicle.*', number_of_wheels=number_of_wheels)
-    blueprint.set_attribute('role_name', 'autopilot')
-    vehicle = self.world.try_spawn_actor(blueprint, transform)
-    if vehicle is not None:
-      vehicle.set_autopilot(enabled=True, tm_port=4050)
-      return True
-    return False
 
   def _try_spawn_ego_vehicle_at(self, transform):
     """Try to spawn the ego vehicle at specific transform.

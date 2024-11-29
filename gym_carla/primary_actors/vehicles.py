@@ -43,6 +43,7 @@ def try_spawn_random_vehicle_at(world, transform, number_of_wheels=[4]):
     print(f"Failed to spawn vehicle at: {transform.location}")
     return False
 
+
 def spawn_vehicles(world, spawn_points, number_of_vehicles, number_of_wheels=[4]):
     """
     Spawn a specified number of surrounding vehicles at given spawn points.

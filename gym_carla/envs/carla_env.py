@@ -27,6 +27,7 @@ import carla
 from gym_carla.envs.render import BirdeyeRender
 from gym_carla.envs.route_planner import RoutePlanner
 from gym_carla.envs.misc import *
+from gym_carla.envs.actor_utils import *
 from gym_carla.primary_actors import *
 from gym_carla.sensors import CollisionDetector, CameraSensors, LIDARSensor, RadarSensor
 
@@ -112,10 +113,10 @@ class CarlaEnv(gym.Env):
     self._set_synchronous_mode(False)
 
     # Delete sensors, vehicles and walkers
-    self._clear_all_actors([
-      'sensor.other.collision', 'sensor.camera.rgb',
-      'sensor.other.radar', 'sensor.lidar.ray_cast',
-      'vehicle.*', 'controller.ai.walker', 'walker.*'
+    clear_all_actors(self.world, [
+        'sensor.other.collision', 'sensor.camera.rgb',
+        'sensor.other.radar', 'sensor.lidar.ray_cast',
+        'vehicle.*', 'controller.ai.walker', 'walker.*'
     ])
 
     # Clear sensor objects
@@ -150,12 +151,14 @@ class CarlaEnv(gym.Env):
     walkers_spawned = spawn_walkers(self.world, self.walker_spawn_points, self.number_of_walkers)
     print(f"Successfully spawned {walkers_spawned} out of {self.number_of_walkers} walkers.")
 
-    # Get actors polygon list
+    # Get vehicle polygon list
     self.vehicle_polygons = []
-    vehicle_poly_dict = self._get_actor_polygons('vehicle.*')
+    vehicle_poly_dict = get_actor_polygons(self.world, 'vehicle.*')
     self.vehicle_polygons.append(vehicle_poly_dict)
+
+    # Get walker polygon list
     self.walker_polygons = []
-    walker_poly_dict = self._get_actor_polygons('walker.*')
+    walker_poly_dict = get_actor_polygons(self.world, 'walker.*')
     self.walker_polygons.append(walker_poly_dict)
 
     # Spawn the ego vehicle
@@ -260,11 +263,11 @@ class CarlaEnv(gym.Env):
     #self.frame += 1
 
     # Append actors polygon list
-    vehicle_poly_dict = self._get_actor_polygons('vehicle.*')
+    vehicle_poly_dict = get_actor_polygons(self.world, 'vehicle.*')
     self.vehicle_polygons.append(vehicle_poly_dict)
     while len(self.vehicle_polygons) > self.max_past_step:
       self.vehicle_polygons.pop(0)
-    walker_poly_dict = self._get_actor_polygons('walker.*')
+    walker_poly_dict = get_actor_polygons(self.world, 'walker.*')
     self.walker_polygons.append(walker_poly_dict)
     while len(self.walker_polygons) > self.max_past_step:
       self.walker_polygons.pop(0)
@@ -286,9 +289,6 @@ class CarlaEnv(gym.Env):
   def seed(self, seed=None):
     self.np_random, seed = seeding.np_random(seed)
     return [seed]
-
-  def render(self, mode):
-    pass
 
   def _create_vehicle_bluepprint(self, actor_filter, color=None, number_of_wheels=[4]):
     """Create the blueprint for a specific actor type.
@@ -378,35 +378,6 @@ class CarlaEnv(gym.Env):
       return True
 
     return False
-
-  def _get_actor_polygons(self, filt):
-    """Get the bounding box polygon of actors.
-
-    Args:
-      filt: the filter indicating what type of actors we'll look at.
-
-    Returns:
-      actor_poly_dict: a dictionary containing the bounding boxes of specific actors.
-    """
-    actor_poly_dict={}
-    for actor in self.world.get_actors().filter(filt):
-      # Get x, y and yaw of the actor
-      trans=actor.get_transform()
-      x=trans.location.x
-      y=trans.location.y
-      yaw=trans.rotation.yaw/180*np.pi
-      # Get length and width
-      bb=actor.bounding_box
-      l=bb.extent.x
-      w=bb.extent.y
-      # Get bounding box polygon in the actor's local coordinate
-      poly_local=np.array([[l,w],[l,-w],[-l,-w],[-l,w]]).transpose()
-      # Get rotation matrix to transform to global coordinate
-      R=np.array([[np.cos(yaw),-np.sin(yaw)],[np.sin(yaw),np.cos(yaw)]])
-      # Get global bounding box polygon
-      poly=np.matmul(R,poly_local).transpose()+np.repeat([[x,y]],4,axis=0)
-      actor_poly_dict[actor.id]=poly
-    return actor_poly_dict
 
   def _get_obs(self):
     """Get the observations."""
@@ -500,25 +471,12 @@ class CarlaEnv(gym.Env):
     if self.time_step>self.max_time_episode:
       return True
 
-
     # If out of lane
     dis, _ = get_lane_dis(self.waypoints, ego_x, ego_y)
     if abs(dis) > self.out_lane_thres:
       return True
 
     return False
-
-  def _clear_all_actors(self, actor_filters):
-      """Clear specific actors."""
-      for actor_filter in actor_filters:
-          for actor in self.world.get_actors().filter(actor_filter):
-              if actor.is_alive:
-                  if actor.type_id == 'controller.ai.walker':
-                      actor.stop()
-                  try:
-                      actor.destroy()
-                  except Exception as e:
-                      print(f"Error destroying actor {actor.type_id}, ID: {actor.id}: {e}")
 
   def _get_info(self):
     self.waypoints, _, self.vehicle_front = self.routeplanner.run_step()

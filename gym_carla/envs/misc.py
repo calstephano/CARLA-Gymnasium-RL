@@ -4,7 +4,7 @@
 #
 # This file is modified from <https://github.com/carla-simulator/carla>:
 # Copyright (c) 2018 Intel Labs.
-# authors: German Ros (german.ros@intel.com)
+# Authors: German Ros (german.ros@intel.com)
 #
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
@@ -20,6 +20,7 @@ import skimage
 def get_speed(vehicle):
   """
   Compute speed of a vehicle in Kmh
+  
   :param vehicle: the vehicle for which speed is calculated
   :return: speed as a float in Kmh
   """
@@ -30,6 +31,7 @@ def get_speed(vehicle):
 def get_pos(vehicle):
   """
   Get the position of a vehicle
+
   :param vehicle: the vehicle whose position is to get
   :return: speed as a float in Kmh
   """
@@ -42,6 +44,7 @@ def get_pos(vehicle):
 def get_info(vehicle):
   """
   Get the full info of a vehicle
+
   :param vehicle: the vehicle whose info is to get
   :return: a tuple of x, y positon, yaw angle and half length, width of the vehicle
   """
@@ -59,6 +62,7 @@ def get_info(vehicle):
 def get_local_pose(global_pose, ego_pose):
   """
   Transform vehicle to ego coordinate
+
   :param global_pose: surrounding vehicle's global pose
   :param ego_pose: ego vehicle pose
   :return: tuple of the pose of the surrounding vehicle in ego coordinate
@@ -78,6 +82,7 @@ def get_pixel_info(local_info, d_behind, obs_range, image_size):
   Transform local vehicle info to pixel info, with ego placed at lower center of image.
   Here the ego local coordinate is left-handed, the pixel coordinate is also left-handed,
   with its origin at the left bottom.
+
   :param local_info: local vehicle info in ego coordinate
   :param d_behind: distance from ego to bottom of FOV
   :param obs_range: length of edge of FOV
@@ -110,6 +115,7 @@ def get_poly_from_info(info):
 def get_pixels_inside_vehicle(pixel_info, pixel_grid):
   """
   Get pixels inside a vehicle, given its pixel level info (x, y, yaw, l, w)
+
   :param pixel_info: pixel level info of the vehicle
   :param pixel_grid: pixel_grid of the image, a tall numpy array pf x, y pixels
   :return: the pixels that are inside the vehicle
@@ -125,6 +131,7 @@ def get_pixels_inside_vehicle(pixel_info, pixel_grid):
 def get_lane_dis(waypoints, x, y):
   """
   Calculate distance from (x, y) to waypoints.
+
   :param waypoints: a list of list storing waypoints like [[x0, y0], [x1, y1], ...]
   :param x: x position of vehicle
   :param y: y position of vehicle
@@ -144,10 +151,10 @@ def get_lane_dis(waypoints, x, y):
   dis = - lv * cross
   return dis, w
 
-
 def get_preview_lane_dis(waypoints, x, y, idx=2):
   """
   Calculate distance from (x, y) to a certain waypoint
+
   :param waypoints: a list of list storing waypoints like [[x0, y0], [x1, y1], ...]
   :param x: x position of vehicle
   :param y: y position of vehicle
@@ -161,7 +168,6 @@ def get_preview_lane_dis(waypoints, x, y, idx=2):
   cross = np.cross(w, vec/lv)
   dis = - lv * cross
   return dis, w
-
 
 def is_within_distance_ahead(target_location, current_location, orientation, max_distance):
   """
@@ -214,6 +220,7 @@ def distance_vehicle(waypoint, vehicle_transform):
 def set_carla_transform(pose):
   """
   Get a carla transform object given pose.
+
   :param pose: list if size 3, indicating the wanted [x, y, yaw] of the transform
   :return: a carla transform object
   """
@@ -223,9 +230,11 @@ def set_carla_transform(pose):
   transform.rotation.yaw = pose[2]
   return transform
 
+
 def display_to_rgb(display, obs_size):
   """
   Transform image grabbed from pygame display to an rgb image uint8 matrix
+
   :param display: pygame display input
   :param obs_size: rgb image size
   :return: rgb image uint8 matrix
@@ -235,17 +244,37 @@ def display_to_rgb(display, obs_size):
   rgb = rgb * 255
   return rgb
 
-def rgb_to_display_surface(rgb, display_size):
-  """
-  Generate pygame surface given an rgb image uint8 matrix
-  :param rgb: rgb image uint8 matrix
-  :param display_size: display size
-  :return: pygame surface
-  """
-  surface = pygame.Surface((display_size, display_size)).convert()
-  display = skimage.transform.resize(rgb, (display_size, display_size))
-  display = np.flip(display, axis=1)
-  display = np.rot90(display, 1)
-  pygame.surfarray.blit_array(surface, display)
-  return surface
 
+def rgb_to_display_surface(rgb, display_size):
+    """
+    Generate pygame surface given an RGB image uint8 matrix.
+
+    :param rgb: RGB image uint8 matrix.
+    :param display_size: Display size.
+    :return: Pygame surface.
+    """
+    surface = pygame.Surface((display_size, display_size)).convert()
+    display = skimage.transform.resize(rgb, (display_size, display_size), preserve_range=True).astype(np.uint8)
+    display = np.flip(display, axis=1)
+    display = np.rot90(display, 1)
+    pygame.surfarray.blit_array(surface, display)
+    return surface
+
+
+def grayscale_to_display_surface(gray, display_size):
+    """
+    Convert a grayscale image into a Pygame-compatible surface for rendering.
+
+    Note:
+    - Grayscale is converted to RGB (3 channels) for visualization purposes only (Pygame requirement)
+    - This does not impact RL tasks, where grayscale is retained internally for efficiency.
+
+    :param gray: Grayscale image as a NumPy array (uint8 matrix).
+    :param display_size: Display size.
+    :return: Pygame surface.
+    """
+    # Convert grayscale to RGB (3 channels)
+    rgb = np.stack((gray, gray, gray), axis=2)
+
+    # Render through rgb_to_display_surface function
+    return rgb_to_display_surface(rgb, display_size)

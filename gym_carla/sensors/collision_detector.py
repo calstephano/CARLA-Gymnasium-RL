@@ -15,7 +15,7 @@ class CollisionDetector:
 
             # Spawn the collision detector and attach it to the vehicle
             self.collision_detector = self.world.spawn_actor(self.collision_bp, carla.Transform(), attach_to=self.vehicle)
-            
+
             # Listen for events
             self.collision_detector.listen(lambda event: self._on_collision(event))
 
@@ -23,7 +23,7 @@ class CollisionDetector:
         impulse = event.normal_impulse
         intensity = np.sqrt(impulse.x**2 + impulse.y**2 + impulse.z**2)
         self.collision_history.append(intensity)
-        
+
         # Keep collision history length to the last recorded collision event
         max_history_length = 1
         if len(self.collision_history) > max_history_length:
@@ -32,15 +32,15 @@ class CollisionDetector:
     def get_data(self):
         # Return latest collision data
         return self.collision_data
-    
+
     def get_collision_history(self):
         # Return collision history as a list of intensities
         return self.collision_history
-    
+
     def get_latest_collision_intensity(self):
         # Return latest collision intensity if available
         return self.collision_history[-1] if self.collision_history else None
-    
+
     def clear_collision_history(self):
         # Clear collision history
         self.collision_history = []

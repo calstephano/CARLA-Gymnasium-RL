@@ -5,12 +5,8 @@
 
 from __future__ import division
 
-import glob
-import os
 import sys
-import math
 import open3d as o3d
-import copy
 import numpy as np
 import pygame
 import random
@@ -27,18 +23,14 @@ from gymnasium import spaces
 from gymnasium.utils import seeding
 import carla
 
+# Local module imports
 from gym_carla.envs.render import BirdeyeRender
 from gym_carla.envs.route_planner import RoutePlanner
 from gym_carla.envs.misc import *
+from gym_carla.envs.actor_utils import *
+from gym_carla.primary_actors import *
+from gym_carla.sensors import CollisionDetector, CameraSensors, LIDARSensor, RadarSensor
 
-# Import sensors
-from gym_carla.sensors.collision_detector import CollisionDetector
-from gym_carla.sensors.camera_sensors import CameraSensors
-from gym_carla.sensors.lidar_sensor import LIDARSensor
-from gym_carla.sensors.radar_sensor import RadarSensor
-
-VIRIDIS = np.array(cm.get_cmap('plasma').colors)
-VID_RANGE = np.linspace(0.0, 1.0, VIRIDIS.shape[0])
 class CarlaEnv(gym.Env):
   """An OpenAI gym wrapper for CARLA simulator."""
 
@@ -60,7 +52,7 @@ class CarlaEnv(gym.Env):
     self.max_ego_spawn_times = params['max_ego_spawn_times']
     self.display_route = params['display_route']
 
-    # Action and observation spaces
+    # Action space
     self.discrete = params['discrete']
     self.discrete_act = [params['discrete_acc'], params['discrete_steer']] # acc, steer
     self.n_acc = len(self.discrete_act[0])
@@ -72,30 +64,32 @@ class CarlaEnv(gym.Env):
       params['continuous_steer_range'][0]]), np.array([params['continuous_accel_range'][1],
       params['continuous_steer_range'][1]]), dtype=np.float32)  # acc, steer
 
-    self.observation_space = spaces.Box(low=0, high=255, shape=(5, self.obs_size, self.obs_size, 3), dtype=np.float32)
+    # Observation space
+    self.observation_space = spaces.Box(
+      low=0, high=255,
+      shape=(4, self.obs_size, self.obs_size),
+      dtype=np.uint8
+    )
 
     # Connect to CARLA server and get world object
-    print('Connecting to Carla server...')
+    print('Connecting to CARLA server...')
     client = carla.Client('localhost', params['port'])
     client.set_timeout(4000.0)
     self.world = client.load_world(params['town'])
-    print('Carla server connected!')
+    print('CARLA server connected!')
 
     # Set weather
     self.world.set_weather(carla.WeatherParameters.ClearNoon)
 
     # Get spawn points
-    self.vehicle_spawn_points = list(self.world.get_map().get_spawn_points())
-    self.walker_spawn_points = []
-    for i in range(self.number_of_walkers):
-      spawn_point = carla.Transform()
-      loc = self.world.get_random_location_from_navigation()
-      if (loc != None):
-        spawn_point.location = loc
-        self.walker_spawn_points.append(spawn_point)
+    self.vehicle_spawn_points = get_vehicle_spawn_points(self.world)
+    print(f"Retrieved {len(self.vehicle_spawn_points)} vehicle spawn points.")
+
+    self.walker_spawn_points = generate_walker_spawn_points(self.world, self.number_of_walkers)
+    print(f"Generated {len(self.walker_spawn_points)} valid walker spawn points out of {self.number_of_walkers} requested.")
 
     # Create the ego vehicle blueprint
-    self.ego_bp = self._create_vehicle_bluepprint(params['ego_vehicle_filter'], color='49,8,8')
+    self.ego_bp = create_vehicle_blueprint(self.world, params['ego_vehicle_filter'], color='49,8,8')
 
     # Initialize sensors
     self.collision_detector = CollisionDetector(self.world)
@@ -114,54 +108,39 @@ class CarlaEnv(gym.Env):
     # Initialize the renderer
     self._init_renderer()
 
-  def reset(self, seed = None):
-    # Clear sensor objects
-    self.collision_detector.collision_detector = None
-    self.camera_sensors.camera_sensor = None
-    self.camera_sensors.camera_sensor2 = None
-    self.camera_sensors.camera_sensor3 = None
-    self.camera_sensors.camera_sensor4 = None
-    self.lidar_sensor.lidar_sensor = None
-    self.radar_sensor.radar_sensor = None
-
-    # Delete sensors, vehicles and walkers
-    self._clear_all_actors(['sensor.other.collision', 'sensor.lidar.ray_cast', 'sensor.camera.rgb', 'vehicle.*', 'controller.ai.walker', 'walker.*'])
-
+  def reset(self, seed = None, options = None):
     # Disable sync mode
     self._set_synchronous_mode(False)
 
+    # Delete sensors, vehicles and walkers
+    clear_all_actors(self.world, [
+        'sensor.other.collision', 'sensor.camera.rgb',
+        'sensor.other.radar', 'sensor.lidar.ray_cast',
+        'vehicle.*', 'controller.ai.walker', 'walker.*'
+    ])
+
+    # Clear sensor objects
+    self.collision_detector.collision_detector = None
+    self.camera_sensors.camera_sensors = None
+    #self.lidar_sensor.lidar_sensor = None
+    #self.radar_sensor.radar_sensor = None
+
     # Spawn surrounding vehicles
     random.shuffle(self.vehicle_spawn_points)
-    count = self.number_of_vehicles
-    if count > 0:
-      for spawn_point in self.vehicle_spawn_points:
-        if self._try_spawn_random_vehicle_at(spawn_point, number_of_wheels=[4]):
-          count -= 1
-        if count <= 0:
-          break
-    while count > 0:
-      if self._try_spawn_random_vehicle_at(random.choice(self.vehicle_spawn_points), number_of_wheels=[4]):
-        count -= 1
+    vehicles_spawned = spawn_vehicles(self.world, self.vehicle_spawn_points, self.number_of_vehicles)
+    print(f"Successfully spawned {vehicles_spawned} out of {self.number_of_vehicles} vehicles.")
 
-    # Spawn pedestrians
-    random.shuffle(self.walker_spawn_points)
-    count = self.number_of_walkers
-    if count > 0:
-      for spawn_point in self.walker_spawn_points:
-        if self._try_spawn_random_walker_at(spawn_point):
-          count -= 1
-        if count <= 0:
-          break
-    while count > 0:
-      if self._try_spawn_random_walker_at(random.choice(self.walker_spawn_points)):
-        count -= 1
+    walkers_spawned = spawn_walkers(self.world, self.walker_spawn_points, self.number_of_walkers)
+    print(f"Successfully spawned {walkers_spawned} out of {self.number_of_walkers} walkers.")
 
-    # Get actors polygon list
+    # Get vehicle polygon list
     self.vehicle_polygons = []
-    vehicle_poly_dict = self._get_actor_polygons('vehicle.*')
+    vehicle_poly_dict = get_actor_polygons(self.world, 'vehicle.*')
     self.vehicle_polygons.append(vehicle_poly_dict)
+
+    # Get walker polygon list
     self.walker_polygons = []
-    walker_poly_dict = self._get_actor_polygons('walker.*')
+    walker_poly_dict = get_actor_polygons(self.world, 'walker.*')
     self.walker_polygons.append(walker_poly_dict)
 
     # Spawn the ego vehicle
@@ -181,26 +160,27 @@ class CarlaEnv(gym.Env):
     # Spawn and attach sensors
     self.collision_detector.spawn_and_attach(self.ego)
     self.camera_sensors.spawn_and_attach(self.ego)
-    self.lidar_sensor.spawn_and_attach(self.ego)
-    self.radar_sensor.spawn_and_attach(self.ego)
 
-    def run_open3d():
-      self.vis = o3d.visualization.Visualizer()
-      self.vis.create_window(
-          window_name='Carla Lidar',
-          width=540,
-          height=540,
-          left=480,
-          top=270, visible=False)
-      self.vis.get_render_option().background_color = [0.05, 0.05, 0.05]
-      self.vis.get_render_option().point_size = 1
-      self.vis.get_render_option().show_coordinate_frame = True
+    #self.lidar_sensor.spawn_and_attach(self.ego)
+    #self.radar_sensor.spawn_and_attach(self.ego)
 
-      self.frame = 0
-      self.dt0 = datetime.now()
-
-    thread_open3d = threading.Thread(target=run_open3d)
-    thread_open3d.start()
+    # def run_open3d():
+    #   self.vis = o3d.visualization.Visualizer()
+    #   self.vis.create_window(
+    #       window_name='Carla Lidar',
+    #       width=540,
+    #       height=540,
+    #       left=480,
+    #       top=270, visible=False)
+    #   self.vis.get_render_option().background_color = [0.05, 0.05, 0.05]
+    #   self.vis.get_render_option().point_size = 1
+    #   self.vis.get_render_option().show_coordinate_frame = True
+    #
+    #   self.frame = 0
+    #   self.dt0 = datetime.now()
+    #
+    # thread_open3d = threading.Thread(target=run_open3d)
+    # thread_open3d.start()
 
     # Update timesteps
     self.time_step=0
@@ -258,18 +238,18 @@ class CarlaEnv(gym.Env):
 
     self.world.tick()
 
-    process_time = datetime.now() - self.dt0
-    sys.stdout.write('\r' + 'FPS: ' + str(1.0 / process_time.total_seconds()))
-    sys.stdout.flush()
+    # process_time = datetime.now() - self.dt0
+    #sys.stdout.write('\r' + 'FPS: ' + str(1.0 / process_time.total_seconds()))
+    #sys.stdout.flush()
     #self.dt0 = datetime.now()
-    self.frame += 1
+    #self.frame += 1
 
     # Append actors polygon list
-    vehicle_poly_dict = self._get_actor_polygons('vehicle.*')
+    vehicle_poly_dict = get_actor_polygons(self.world, 'vehicle.*')
     self.vehicle_polygons.append(vehicle_poly_dict)
     while len(self.vehicle_polygons) > self.max_past_step:
       self.vehicle_polygons.pop(0)
-    walker_poly_dict = self._get_actor_polygons('walker.*')
+    walker_poly_dict = get_actor_polygons(self.world, 'walker.*')
     self.walker_polygons.append(walker_poly_dict)
     while len(self.walker_polygons) > self.max_past_step:
       self.walker_polygons.pop(0)
@@ -291,9 +271,6 @@ class CarlaEnv(gym.Env):
   def seed(self, seed=None):
     self.np_random, seed = seeding.np_random(seed)
     return [seed]
-
-  def render(self, mode):
-    pass
 
   def _create_vehicle_bluepprint(self, actor_filter, color=None, number_of_wheels=[4]):
     """Create the blueprint for a specific actor type.
@@ -355,33 +332,6 @@ class CarlaEnv(gym.Env):
       return True
     return False
 
-  def _try_spawn_random_walker_at(self, transform):
-    """Try to spawn a walker at specific transform with random bluprint.
-
-    Args:
-      transform: the carla transform object.
-
-    Returns:
-      Bool indicating whether the spawn is successful.
-    """
-    walker_bp = random.choice(self.world.get_blueprint_library().filter('walker.*'))
-    # set as not invencible
-    if walker_bp.has_attribute('is_invincible'):
-      walker_bp.set_attribute('is_invincible', 'false')
-    walker_actor = self.world.try_spawn_actor(walker_bp, transform)
-
-    if walker_actor is not None:
-      walker_controller_bp = self.world.get_blueprint_library().find('controller.ai.walker')
-      walker_controller_actor = self.world.spawn_actor(walker_controller_bp, carla.Transform(), walker_actor)
-      # start walker
-      walker_controller_actor.start()
-      # set walk to random point
-      walker_controller_actor.go_to_location(self.world.get_random_location_from_navigation())
-      # random max speed
-      walker_controller_actor.set_max_speed(1 + random.random())    # max speed between 1 and 2 (default is 1.4 m/s)
-      return True
-    return False
-
   def _try_spawn_ego_vehicle_at(self, transform):
     """Try to spawn the ego vehicle at specific transform.
     Args:
@@ -411,40 +361,11 @@ class CarlaEnv(gym.Env):
 
     return False
 
-  def _get_actor_polygons(self, filt):
-    """Get the bounding box polygon of actors.
-
-    Args:
-      filt: the filter indicating what type of actors we'll look at.
-
-    Returns:
-      actor_poly_dict: a dictionary containing the bounding boxes of specific actors.
-    """
-    actor_poly_dict={}
-    for actor in self.world.get_actors().filter(filt):
-      # Get x, y and yaw of the actor
-      trans=actor.get_transform()
-      x=trans.location.x
-      y=trans.location.y
-      yaw=trans.rotation.yaw/180*np.pi
-      # Get length and width
-      bb=actor.bounding_box
-      l=bb.extent.x
-      w=bb.extent.y
-      # Get bounding box polygon in the actor's local coordinate
-      poly_local=np.array([[l,w],[l,-w],[-l,-w],[-l,w]]).transpose()
-      # Get rotation matrix to transform to global coordinate
-      R=np.array([[np.cos(yaw),-np.sin(yaw)],[np.sin(yaw),np.cos(yaw)]])
-      # Get global bounding box polygon
-      poly=np.matmul(R,poly_local).transpose()+np.repeat([[x,y]],4,axis=0)
-      actor_poly_dict[actor.id]=poly
-    return actor_poly_dict
-
   def _get_obs(self):
     """Get the observations."""
     # Birdeye rendering
     self.birdeye_render.vehicle_polygons = self.vehicle_polygons
-    self.birdeye_render.walker_polygons = self.walker_polygons
+    #self.birdeye_render.walker_polygons = self.walker_polygons
     self.birdeye_render.waypoints = self.waypoints
 
     # Birdeye view with roadmap and actors
@@ -460,13 +381,13 @@ class CarlaEnv(gym.Env):
     birdeye_surface = rgb_to_display_surface(birdeye, self.display_size)
     self.display.blit(birdeye_surface, (0, 0))
 
-    img = Image.open("lidar_temp_img.png")
-    self.lidar_img = np.array(img)
-    lidar_arr = np.zeros((1, self.obs_size, self.obs_size, 3))
-    lidar_arr = lidar_arr.astype(np.float32)
-    lidar_arr[0] = resize(self.lidar_img, (self.obs_size, self.obs_size, 3)) * 255
-    lidar_surface = rgb_to_display_surface(lidar_arr[0], self.display_size)
-    self.display.blit(lidar_surface, (self.display_size * 1, 0))
+    # img = Image.open("lidar_temp_img.png")
+    # self.lidar_img = np.array(img)
+    # lidar_arr = np.zeros((1, self.obs_size, self.obs_size, 3))
+    # lidar_arr = lidar_arr.astype(np.float32)
+    # lidar_arr[0] = resize(self.lidar_img, (self.obs_size, self.obs_size, 3)) * 255
+    # lidar_surface = rgb_to_display_surface(lidar_arr[0], self.display_size)
+    # self.display.blit(lidar_surface, (self.display_size * 1, 0))
 
     # Display camera images from get_data
     camera_surfaces = self.camera_sensors.display_camera_img(self.display)
@@ -476,11 +397,11 @@ class CarlaEnv(gym.Env):
 
     obs = {
       'camera':camera_surfaces,
-      'lidar':lidar_arr,
+      # 'lidar':lidar_arr,
       'birdeye':birdeye.astype(np.uint8)
     }
-    
-    return np.concatenate((obs['camera'],obs['lidar']))
+
+    return (obs['camera'])
 
   def _get_reward(self):
     """Calculate the step reward."""
@@ -532,22 +453,12 @@ class CarlaEnv(gym.Env):
     if self.time_step>self.max_time_episode:
       return True
 
-
     # If out of lane
     dis, _ = get_lane_dis(self.waypoints, ego_x, ego_y)
     if abs(dis) > self.out_lane_thres:
       return True
 
     return False
-
-  def _clear_all_actors(self, actor_filters):
-    """Clear specific actors."""
-    for actor_filter in actor_filters:
-      for actor in self.world.get_actors().filter(actor_filter):
-        if actor.is_alive:
-          if actor.type_id == 'controller.ai.walker':
-            actor.stop()
-          actor.destroy()
 
   def _get_info(self):
     self.waypoints, _, self.vehicle_front = self.routeplanner.run_step()

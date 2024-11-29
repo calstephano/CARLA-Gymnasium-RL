@@ -29,18 +29,13 @@ def try_spawn_random_vehicle_at(world, transform, number_of_wheels=[4]):
     """
     print(f"Attempting to spawn vehicle at: {transform.location}")
     blueprint = create_vehicle_blueprint(world, 'vehicle.*', number_of_wheels=number_of_wheels)
-    if not blueprint:
-        print(f"Failed to create blueprint for vehicle at: {transform.location}")
-        return False
 
     blueprint.set_attribute('role_name', 'autopilot')
     vehicle = world.try_spawn_actor(blueprint, transform)
     if vehicle is not None:
-        print(f"Successfully spawned vehicle at: {vehicle.get_transform().location}")
         vehicle.set_autopilot(enabled=True, tm_port=4050)
         return True
 
-    print(f"Failed to spawn vehicle at: {transform.location}")
     return False
 
 
@@ -62,7 +57,10 @@ def spawn_vehicles(world, spawn_points, number_of_vehicles, number_of_wheels=[4]
     if count > 0:
       for spawn_point in spawn_points:
         if try_spawn_random_vehicle_at(world, spawn_point, number_of_wheels=[4]):
+          print(f"Successfully spawned vehicle at {spawn_point.location}.")
           count -= 1
+        else:
+           print(f"Failed to spawn vehicle at {spawn_point.location}.")
         if count <= 0:
           break
     while count > 0:

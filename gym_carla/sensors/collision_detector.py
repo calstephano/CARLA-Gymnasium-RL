@@ -29,13 +29,19 @@ class CollisionDetector:
         if len(self.collision_history) > max_history_length:
             self.collision_history.pop(0)
 
+        # Log details of the collision
+        other_actor = event.other_actor
+        actor_type = other_actor.type_id if other_actor else "Unknown"
+        impulse_magnitude = np.linalg.norm([impulse.x, impulse.y, impulse.z])
+
+        print(f"[DEBUG] Collision detected!")
+        print(f"  - Other actor type: {actor_type}")
+        print(f"  - Collision intensity: {impulse_magnitude}")
+        print(f"  - Collision location: {event.transform.location}")
+
     def get_data(self):
         # Return latest collision data
         return self.collision_data
-
-    def get_collision_history(self):
-        # Return collision history as a list of intensities
-        return self.collision_history
 
     def get_latest_collision_intensity(self):
         # Return latest collision intensity if available

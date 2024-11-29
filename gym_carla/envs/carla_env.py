@@ -128,7 +128,6 @@ class CarlaEnv(gym.Env):
     # Spawn surrounding vehicles
     random.shuffle(self.vehicle_spawn_points)
     vehicles_spawned = spawn_vehicles(self.world, self.vehicle_spawn_points, self.number_of_vehicles)
-    print(f"Successfully spawned {vehicles_spawned} out of {self.number_of_vehicles} vehicles.")
 
     walkers_spawned = spawn_walkers(self.world, self.walker_spawn_points, self.number_of_walkers)
     print(f"Successfully spawned {walkers_spawned} out of {self.number_of_walkers} walkers.")
@@ -159,6 +158,7 @@ class CarlaEnv(gym.Env):
 
     # Spawn and attach sensors
     self.collision_detector.spawn_and_attach(self.ego)
+    self.collision_detector.clear_collision_history()
     self.camera_sensors.spawn_and_attach(self.ego)
 
     #self.lidar_sensor.spawn_and_attach(self.ego)
@@ -254,7 +254,7 @@ class CarlaEnv(gym.Env):
     while len(self.walker_polygons) > self.max_past_step:
       self.walker_polygons.pop(0)
 
-    # Route planner
+    # route planner
     self.waypoints, _, self.vehicle_front = self.routeplanner.run_step()
 
     info = self._get_info()
@@ -410,19 +410,16 @@ class CarlaEnv(gym.Env):
 
     # If collides
     if self.collision_detector.get_latest_collision_intensity():
-        print("[DEBUG] Termination due to collision.")
-        return True
+      return True
 
-    # If reaches maximum timestep
-    if self.time_step > self.max_time_episode:
-        print("[DEBUG] Termination due to max time step.")
-        return True
+    # If reach maximum timestep
+    if self.time_step>self.max_time_episode:
+      return True
 
     # If out of lane
     dis, _ = get_lane_dis(self.waypoints, ego_x, ego_y)
     if abs(dis) > self.out_lane_thres:
-        print(f"[DEBUG] Termination due to out of lane. Distance: {dis}")
-        return True
+      return True
 
     return False
 

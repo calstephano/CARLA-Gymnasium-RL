@@ -34,8 +34,9 @@ from gym_carla.sensors import CollisionDetector, CameraSensors, LIDARSensor, Rad
 class CarlaEnv(gym.Env):
   """An OpenAI gym wrapper for CARLA simulator."""
 
-  def __init__(self, params):
-    # Parameters
+  def __init__(self, params, writer=None):
+    ...
+    self.total_step = 0 
     self.display_size = params['display_size']
     self.max_past_step = params['max_past_step']
     self.number_of_vehicles = params['number_of_vehicles']
@@ -51,6 +52,7 @@ class CarlaEnv(gym.Env):
     self.desired_speed = params['desired_speed']
     self.max_ego_spawn_times = params['max_ego_spawn_times']
     self.display_route = params['display_route']
+    self.writer = writer
 
     # Action space
     self.discrete = params['discrete']
@@ -229,13 +231,12 @@ class CarlaEnv(gym.Env):
     #   self.vis.update_renderer()
     #   self.vis.capture_screen_image(filename="lidar_temp_img.png")
 
-
     # thread_update3d = threading.Thread(target=update_open3d)
     # thread_update3d.start()
          # This can fix Open3D jittering issues:
     # time.sleep(0.005)
 
-
+    # Tick the world
     self.world.tick()
 
     # process_time = datetime.now() - self.dt0
@@ -254,20 +255,31 @@ class CarlaEnv(gym.Env):
     while len(self.walker_polygons) > self.max_past_step:
       self.walker_polygons.pop(0)
 
-    # route planner
+    # Route planner
     self.waypoints, _, self.vehicle_front = self.routeplanner.run_step()
 
-    info = self._get_info()
+    # Get reward and log components
+    total_reward, reward_components = self._get_reward(self.total_step)
+    if self.writer:
+        for key, value in reward_components.items():
+            self.writer.add_scalar(f"Reward/{key}", value, self.total_step)
+
+    # Check termination conditions
+    terminated = self._terminal()
 
     # TODO episode truncates if last waypoint is reached
     truncated = False
 
     # Update timesteps
-    self.time_step += 1
-    self.total_step += 1
+    self.time_step += 1   # Episode timestep
+    self.total_step += 1  # Global timestep
 
-    return (self._get_obs(), self._get_reward(), self._terminal(), truncated, info)
+    # Prepare info dictionary
+    info = self._get_info()
+    info["reward_components"] = reward_components  # Include reward components for debugging
 
+    return (self._get_obs(), total_reward, self._terminal(), truncated, info)
+  
   def seed(self, seed=None):
     self.np_random, seed = seeding.np_random(seed)
     return [seed]
@@ -366,42 +378,47 @@ class CarlaEnv(gym.Env):
 
     return (obs['camera'])
 
-  def _get_reward(self):
-    """Calculate the step reward."""
-    # Reward for speed tracking
+  def _get_reward(self, step):
+    """Calculate the step reward and log components to TensorBoard."""
     v = self.ego.get_velocity()
     speed = np.sqrt(v.x**2 + v.y**2)
     r_speed = -abs(speed - self.desired_speed)
 
-    # Reward for collision
     r_collision = 0
     if self.collision_detector.get_latest_collision_intensity() is not None:
         r_collision = -1
 
-    # Reward for steering:
     r_steer = -self.ego.get_control().steer**2
 
-    # Reward for out of lane
     ego_x, ego_y = get_pos(self.ego)
     dis, w = get_lane_dis(self.waypoints, ego_x, ego_y)
     r_out = 0
     if abs(dis) > self.out_lane_thres:
-      r_out = -1
+        r_out = -1
 
-    # Longitudinal speed
     lspeed = np.array([v.x, v.y])
     lspeed_lon = np.dot(lspeed, w)
 
-    # Cost for too fast
     r_fast = 0
     if lspeed_lon > self.desired_speed:
-      r_fast = -1
+        r_fast = -1
 
-    # Cost for lateral acceleration
     r_lat = - abs(self.ego.get_control().steer) * lspeed_lon**2
-    r = 200*r_collision + 5*r_speed + 10*r_fast + 2*r_out + r_steer*5 + 0.2*r_lat - 0.1
+    total_reward = 200 * r_collision + 5 * r_speed + 10 * r_fast + 2 * r_out + r_steer * 5 + 0.2 * r_lat - 0.1
 
-    return r
+    # Log reward components to TensorBoard
+    reward_components = {
+      "speed_reward": r_speed,
+      "collision_reward": r_collision,
+      "steering_reward": r_steer,
+      "out_of_lane_reward": r_out,
+      "too_fast_reward": r_fast,
+      "lateral_acceleration_reward": r_lat,
+      "total_reward": total_reward
+    }
+
+    return total_reward, reward_components
+
 
   def _terminal(self):
     """Calculate whether to terminate the current episode."""

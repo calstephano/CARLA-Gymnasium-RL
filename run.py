@@ -6,6 +6,7 @@
 import gymnasium as gym
 import gym_carla
 from stable_baselines3 import DQN, PPO, SAC
+from torch.utils.tensorboard import SummaryWriter
 
 def main():
   # Define environment parameters
@@ -54,8 +55,11 @@ def main():
     print("Invalid input. Defaulting to DQN.")
     model_type = 'DQN'
 
+  # Initialize the TensorBoard writer
+  writer = SummaryWriter(log_dir=f"./tensorboard/{model_type}/reward_logs/")
+
   # Initialize the environment
-  env = gym.make('carla-v0', params=params)
+  env = gym.make('carla-v0', params=params, writer=writer)
 
   # Initialize the model
   model = select_model(env, model_type, 'CnnPolicy', verbose=1, tensorboard_log=f"./tensorboard/{model_type}/")
@@ -66,6 +70,9 @@ def main():
   # Test the model
   test_model(model, env)
 
+  # Close the TensorBoard writer
+  writer.close()
+  
 def select_model(env, model_type, policy_type, **kwargs):
   """Select the appropriate model based on the user's choice."""
   if model_type == 'DQN':

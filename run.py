@@ -63,11 +63,11 @@ def main():
 
   # Find the next trial number
   trial_number = len([d for d in os.listdir(base_log_dir) if os.path.isdir(os.path.join(base_log_dir, d)) and d.startswith(model_type)]) + 1
-  
+
   # Initialize reward directory
   reward_log_dir = f"{base_log_dir}/Reward_Logs_{trial_number}"
   os.makedirs(reward_log_dir, exist_ok=True)
-  
+
   # Initialize the TensorBoard writer for rewards
   writer = SummaryWriter(log_dir=reward_log_dir)
 
@@ -75,7 +75,7 @@ def main():
   env = gym.make('carla-v0', params=params, writer=writer)
 
   # Initialize the model
-  model = select_model(env, model_type, policy_type, verbose=1, tensorboard_log=base_log_dir)
+  model = select_model(env, model_type, verbose=1, tensorboard_log=base_log_dir)
 
   # Train the model
   model.learn(total_timesteps=10000)
@@ -85,20 +85,20 @@ def main():
 
   # Close the TensorBoard writer
   writer.close()
-  
-def select_model(env, model_type, policy_type, **kwargs):
+
+def select_model(env, model_type, **kwargs):
   """Select the appropriate model based on the user's choice."""
   if model_type == 'DQN':
     return DQN(
-      QValuePolicy, 
-      env, 
-      buffer_size=50_000, 
+      "MultiInputPolicy",
+      env,
+      buffer_size=50_000,
       **kwargs
     )
   elif model_type == 'SAC':
-    return SAC(policy_type, env, buffer_size=50_000, **kwargs)
+    return SAC("MultiInputPolicy", env, buffer_size=50_000, **kwargs)
   elif model_type == 'PPO':
-    return PPO(policy_type, env, **kwargs)
+    return PPO("MultiInputPolicy", env, **kwargs)
   else:
     raise ValueError(f"Unsupported model type: {model_type}")
 

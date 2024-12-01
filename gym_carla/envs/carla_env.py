@@ -83,7 +83,6 @@ class CarlaEnv(gym.Env):
         shape=(4,), 
         dtype=np.float32),
     })
-    print(self.observation_space)
 
     # Connect to CARLA server and get world object
     print('Connecting to CARLA server...')

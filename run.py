@@ -85,6 +85,7 @@ def main():
   # Close the TensorBoard writer
   writer.close()
 
+# Model specifications
 def select_model(env, model_type, **kwargs):
   """Select the appropriate model based on the user's choice."""
   if model_type == 'DQN':
@@ -95,9 +96,9 @@ def select_model(env, model_type, **kwargs):
       **kwargs
     )
   elif model_type == 'SAC':
-    return SAC(MultiInputPolicy, env, buffer_size=50_000, **kwargs)
+    return SAC("MultiInputPolicy", env, buffer_size=50_000, **kwargs)
   elif model_type == 'PPO':
-    return PPO(MultiInputPolicy, env, **kwargs)
+    return PPO("MultiInputPolicy", env, **kwargs)
   else:
     raise ValueError(f"Unsupported model type: {model_type}")
 
@@ -107,7 +108,6 @@ def test_model(model, env, steps=100):
   for step in range(steps):
     action, _states = model.predict(obs)
     obs, rewards, terminated, truncated, info = env.step(action)
-    print(f"Step: {step}, Reward: {rewards}")
     if terminated or truncated:
       print("Episode finished.")
       break

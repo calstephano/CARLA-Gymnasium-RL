@@ -36,7 +36,7 @@ class CarlaEnv(gym.Env):
 
   def __init__(self, params, writer=None):
     ...
-    self.total_step = 0 
+    self.total_step = 0
     self.display_size = params['display_size']
     self.max_past_step = params['max_past_step']
     self.number_of_vehicles = params['number_of_vehicles']
@@ -279,7 +279,7 @@ class CarlaEnv(gym.Env):
     info["reward_components"] = reward_components  # Include reward components for debugging
 
     return (self._get_obs(), total_reward, self._terminal(), truncated, info)
-  
+
   def seed(self, seed=None):
     self.np_random, seed = seeding.np_random(seed)
     return [seed]
@@ -370,46 +370,58 @@ class CarlaEnv(gym.Env):
     return (obs['camera'])
 
   def _get_reward(self, step):
-    """Calculate the step reward and log components to TensorBoard."""
-    v = self.ego.get_velocity()
-    speed = np.sqrt(v.x**2 + v.y**2)
-    r_speed = -abs(speed - self.desired_speed)
-
-    r_collision = 0
-    if self.collision_detector.get_latest_collision_intensity() is not None:
-        r_collision = -1
-
-    r_steer = -self.ego.get_control().steer**2
-
+    """Calculate the step reward based on waypoint following and log components to TensorBoard."""
+    # Get the ego vehicle's position
     ego_x, ego_y = get_pos(self.ego)
+
+    # Calculate the distance to the closest waypoint and alignment vector
     dis, w = get_lane_dis(self.waypoints, ego_x, ego_y)
+
+    # Reward for staying close to the lane center (encourages waypoint following)
+    r_lane_centering = 20 - 40 * abs(dis)  # High reward near center, penalize deviation
+
+    # Penalize going out of lane
     r_out = 0
     if abs(dis) > self.out_lane_thres:
-        r_out = -1
+      r_out = -100  # Heavy penalty for leaving the lane
 
-    lspeed = np.array([v.x, v.y])
-    lspeed_lon = np.dot(lspeed, w)
+    # Reward for progress toward the next waypoint
+    prev_dis = getattr(self, 'prev_distance', None)  # Track progress since last step
+    if prev_dis is None:
+      r_progress = 0  # No progress in the first step
+    else:
+      r_progress = max(0, prev_dis - dis)  # Reward reduction in distance
+    self.prev_distance = dis  # Update distance tracker
 
-    r_fast = 0
-    if lspeed_lon > self.desired_speed:
-        r_fast = -1
+    # Penalize sharp or frequent steering to reduce wobbling
+    steer = abs(self.ego.get_control().steer)
+    r_smooth_steering = -steer**2 * 5  # Penalize sharper steering more heavily
 
-    r_lat = - abs(self.ego.get_control().steer) * lspeed_lon**2
-    total_reward = 200 * r_collision + 5 * r_speed + 10 * r_fast + 2 * r_out + r_steer * 5 + 0.2 * r_lat - 0.1
+    # Reward or penalize for maintaining desired speed
+    v = self.ego.get_velocity()
+    speed = np.sqrt(v.x**2 + v.y**2)  # Calculate speed
+    desired_speed = self.desired_speed  # Define the desired speed
+    r_speed = -abs(speed - desired_speed)  # Penalize deviation from desired speed
+
+    # Discourage stopping unnecessarily (encourage minimum speed)
+    min_speed = 1.0  # Minimum threshold speed in m/s
+    if speed < min_speed:
+      r_speed -= 10  # Heavy penalty for stopping (unless traffic signals are implemented)
+
+    # Total reward combines progress, lane-centering, smooth steering, and speed rewards
+    total_reward = r_progress + r_lane_centering + r_out + r_smooth_steering + r_speed
 
     # Log reward components to TensorBoard
     reward_components = {
+      "lane_centering_reward": r_lane_centering,
+      "out_of_lane_penalty": r_out,
+      "progress_reward": r_progress,
+      "smooth_steering_penalty": r_smooth_steering,
       "speed_reward": r_speed,
-      "collision_reward": r_collision,
-      "steering_reward": r_steer,
-      "out_of_lane_reward": r_out,
-      "too_fast_reward": r_fast,
-      "lateral_acceleration_reward": r_lat,
       "total_reward": total_reward
     }
 
     return total_reward, reward_components
-
 
   def _terminal(self):
     """Calculate whether to terminate the current episode."""

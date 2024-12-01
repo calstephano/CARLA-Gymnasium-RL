@@ -335,12 +335,6 @@ class CarlaEnv(gym.Env):
     speed = np.sqrt(v.x**2 + v.y**2)
     state = np.array([lateral_dis, -delta_yaw, speed, self.vehicle_front], dtype=np.float32)
 
-    # Check for invalid values
-    if np.any(np.isnan(state)):
-        print("State contains NaN values.")
-    if np.any(np.isinf(state)):
-        print("State contains Inf values.")
-
     # Retrieve optimized camera images for RL
     camera_images = self.camera_sensors.camera_img
     obs = {
@@ -351,124 +345,81 @@ class CarlaEnv(gym.Env):
     return obs
 
   def _get_reward(self, step):
-    """Calculate the reward with improved design."""
+    """Calculate the reward with improved waypoint progress logic using dot product."""
     # Extract state variables
     obs = self._get_obs()
     lateral_dis, delta_yaw, speed, vehicle_front = obs['state']
 
-    # Reward for staying in the lane center (normalized by lane width, e.g., 2.0 meters)
+    # Reward components
     lane_width = 2.0
-    r_lane = -abs(lateral_dis / lane_width)  # Penalize large deviations, normalized
+    max_delta_yaw = np.pi / 4
+
+    # Reward for staying in the lane center
+    r_lane = -abs(lateral_dis / lane_width)
 
     # Reward for aligning with the lane direction
-    max_delta_yaw = np.pi / 4  # Assume max delta_yaw is 45 degrees
-    r_heading = -abs(delta_yaw / max_delta_yaw)  # Penalize large heading errors, normalized
+    r_heading = -abs(delta_yaw / max_delta_yaw)
 
-    # Reward for maintaining desired speed (speed difference normalized by desired speed)
+    # Reward for maintaining desired speed
     r_speed = -abs((speed - self.desired_speed) / self.desired_speed)
 
-    # Penalty for collisions (high penalty for safety-critical behavior)
-    r_collision = 0
-    if self.collision_detector.get_latest_collision_intensity() is not None:
-        r_collision = -50  # High penalty for collisions
+    # Penalty for collisions
+    r_collision = -50 if self.collision_detector.get_latest_collision_intensity() else 0
 
-    # Penalty for unsafe proximity to the vehicle in front (encourage safe following distance)
-    r_proximity = 0
-    safe_distance = 5.0  # Safe distance in meters
-    if vehicle_front > 0 and vehicle_front < safe_distance:
-        r_proximity = -1 * (safe_distance - vehicle_front) / safe_distance  # Penalize more for closer distances
+    # Penalize abrupt yaw changes
+    r_smooth_yaw = -abs(delta_yaw - getattr(self, 'previous_yaw', delta_yaw)) / max_delta_yaw
+    self.previous_yaw = delta_yaw
 
-    # Penalize abrupt yaw changes for smoother turns
-    r_smooth_yaw = 0
-    if hasattr(self, 'previous_yaw'):
-        current_yaw = delta_yaw
-        r_smooth_yaw = -abs(current_yaw - self.previous_yaw) / max_delta_yaw
-        self.previous_yaw = current_yaw  # Update previous yaw
-    else:
-        self.previous_yaw = delta_yaw
-
-    # Penalize abrupt steering changes for smoother maneuvers
-    r_smooth_steering = 0
-    if hasattr(self, 'previous_steer'):
-        current_steer = self.ego.get_control().steer
-        r_smooth_steering = -abs(current_steer - self.previous_steer)
-        self.previous_steer = current_steer  # Update previous steer
-    else:
-        self.previous_steer = self.ego.get_control().steer
-
-    # Penalize lateral acceleration for stability (encourage smoother motion)
+    # Penalize lateral acceleration
+    current_steer = self.ego.get_control().steer
     v = self.ego.get_velocity()
-    lspeed = np.array([v.x, v.y])
-    lspeed_lon = np.dot(lspeed, np.array([np.cos(delta_yaw), np.sin(delta_yaw)]))
-    r_lateral_acc = -abs(self.ego.get_control().steer) * (lspeed_lon**2 / self.desired_speed**2)
+    lspeed_lon = np.dot([v.x, v.y], [np.cos(delta_yaw), np.sin(delta_yaw)])
+    r_lateral_acc = -abs(current_steer) * (lspeed_lon**2 / self.desired_speed**2)
 
-    # Incentivize reaching waypoints (reward for progress)
+    # Reward for waypoint progress
     progress_reward = 0
-    if len(self.waypoints) > 0:
-        # Get ego vehicle position
+    if self.waypoints:
         ego_x, ego_y = get_pos(self.ego)
+        waypoint_x, waypoint_y = self.waypoints[0][:2]
+        distance_to_waypoint = np.linalg.norm([ego_x - waypoint_x, ego_y - waypoint_y])
 
-        # Get the next waypoint position
-        next_waypoint = self.waypoints[0]
-        waypoint_x, waypoint_y = next_waypoint[0], next_waypoint[1]  # Extract x, y from the [x, y, yaw] list
+        progress_reward = 5 if distance_to_waypoint < getattr(self, 'previous_distance_to_waypoint', float('inf')) else -1
+        self.previous_distance_to_waypoint = distance_to_waypoint
 
+        if distance_to_waypoint < 1.0:
+            progress_reward += 10
+            self.waypoints.pop(0)
 
-        # Calculate distance to the next waypoint
-        distance_to_waypoint = np.sqrt((ego_x - waypoint_x)**2 + (ego_y - waypoint_y)**2)
-
-        # Initialize progress tracking
-        if hasattr(self, 'previous_distance_to_waypoint'):
-            if distance_to_waypoint < self.previous_distance_to_waypoint:
-                # Reward getting closer to the waypoint
-                progress_reward = 1
-            else:
-                # Penalize moving away from the waypoint
-                progress_reward = -1
-            self.previous_distance_to_waypoint = distance_to_waypoint
-        else:
-            self.previous_distance_to_waypoint = distance_to_waypoint
-
-        # Check if waypoint is reached
-        if distance_to_waypoint < 1.0:  # Threshold for reaching a waypoint (e.g., 1 meter)
-            progress_reward += 10  # Bonus reward for reaching the waypoint
-            self.waypoints.pop(0)  # Move to the next waypoint
-
-
-    # Combine all rewards
+    # Combine rewards
     total_reward = (
-        10 * r_lane +              # Encourage staying in the lane
-        5 * r_heading +            # Encourage proper alignment with the road
-        2 * r_speed +              # Encourage maintaining the desired speed
-        200 * r_collision +        # Penalize collisions heavily
-        10 * r_proximity +         # Penalize unsafe following distances
-        2 * r_smooth_yaw +         # Penalize abrupt yaw changes
-        2 * r_smooth_steering +    # Penalize abrupt steering changes
-        0.5 * r_lateral_acc +      # Penalize lateral acceleration
-        1 * progress_reward        # Reward for waypoint progress
+        10 * r_lane +
+        5 * r_heading +
+        2 * r_speed +
+        r_collision +
+        2 * r_smooth_yaw +
+        # 2 * r_smooth_steering +
+        0.5 * r_lateral_acc +
+        progress_reward
     )
-
-    # Normalize total reward (optional: for stability in training)
     total_reward = np.clip(total_reward, -100, 100)
 
-    # Log reward components to TensorBoard
-    reward_components = {
-        "lane_reward": r_lane,
-        "heading_reward": r_heading,
-        "speed_reward": r_speed,
-        "collision_reward": r_collision,
-        "proximity_reward": r_proximity,
-        "smooth_yaw_penalty": r_smooth_yaw,
-        "smooth_steering_penalty": r_smooth_steering,
-        "lateral_acceleration_penalty": r_lateral_acc,
-        "progress_reward": progress_reward,
-        "total_reward": total_reward
-    }
+    # Log rewards
     if self.writer:
+        reward_components = {
+            "lane_reward": r_lane,
+            "heading_reward": r_heading,
+            "speed_reward": r_speed,
+            "collision_reward": r_collision,
+            "smooth_yaw_penalty": r_smooth_yaw,
+            "smooth_steering_penalty": r_smooth_steering,
+            "lateral_acceleration_penalty": r_lateral_acc,
+            "progress_reward": progress_reward,
+            "total_reward": total_reward
+        }
         for key, value in reward_components.items():
             self.writer.add_scalar(f"Reward/{key}", value, self.total_step)
 
     return total_reward, reward_components
-
 
   def _terminal(self):
     """Calculate whether to terminate the current episode."""

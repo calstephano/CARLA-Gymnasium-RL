@@ -76,7 +76,15 @@ def main():
 def select_model(env, model_type, policy_type, **kwargs):
   """Select the appropriate model based on the user's choice."""
   if model_type == 'DQN':
-    return DQN(policy_type, env, buffer_size=50_000, **kwargs)
+    return DQN(
+      policy_type, 
+      env, 
+      buffer_size=50_000, 
+      exploration_initial_eps=1.0,  # Start with 100% exploration
+      exploration_final_eps=0.05,   # End with 5% exploration
+      exploration_fraction=0.8,     # Decay over 80% of training timesteps
+      **kwargs
+    )
   elif model_type == 'SAC':
     return SAC(policy_type, env, buffer_size=50_000, **kwargs)
   elif model_type == 'PPO':

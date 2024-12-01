@@ -356,23 +356,14 @@ class CarlaEnv(gym.Env):
     birdeye_surface = rgb_to_display_surface(birdeye, self.display_size)
     self.display.blit(birdeye_surface, (0, 0))
 
-    # img = Image.open("lidar_temp_img.png")
-    # self.lidar_img = np.array(img)
-    # lidar_arr = np.zeros((1, self.obs_size, self.obs_size, 3))
-    # lidar_arr = lidar_arr.astype(np.float32)
-    # lidar_arr[0] = resize(self.lidar_img, (self.obs_size, self.obs_size, 3)) * 255
-    # lidar_surface = rgb_to_display_surface(lidar_arr[0], self.display_size)
-    # self.display.blit(lidar_surface, (self.display_size * 1, 0))
-
-    # Display camera images from get_data
-    camera_surfaces = self.camera_sensors.display_camera_img(self.display)
-
-    # Display on pygame
+    # Display on Pygame (for visualization only)
+    self.camera_sensors.display_camera_img(self.display)
     pygame.display.flip()
 
+    # Retrieve optimized camera images for RL
+    camera_images = self.camera_sensors.camera_img
     obs = {
-      'camera':camera_surfaces,
-      # 'lidar':lidar_arr,
+      'camera':camera_images,
       'birdeye':birdeye.astype(np.uint8)
     }
 

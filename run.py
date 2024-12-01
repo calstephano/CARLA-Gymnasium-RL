@@ -7,7 +7,6 @@ import os
 import gymnasium as gym
 import gym_carla
 from torch.utils.tensorboard import SummaryWriter
-from gym_carla.policies import *
 from stable_baselines3 import DQN, PPO, SAC
 
 def main():
@@ -96,9 +95,9 @@ def select_model(env, model_type, **kwargs):
       **kwargs
     )
   elif model_type == 'SAC':
-    return SAC("MultiInputPolicy", env, buffer_size=50_000, **kwargs)
+    return SAC(MultiInputPolicy, env, buffer_size=50_000, **kwargs)
   elif model_type == 'PPO':
-    return PPO("MultiInputPolicy", env, **kwargs)
+    return PPO(MultiInputPolicy, env, **kwargs)
   else:
     raise ValueError(f"Unsupported model type: {model_type}")
 

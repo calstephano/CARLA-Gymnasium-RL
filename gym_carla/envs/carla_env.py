@@ -345,54 +345,82 @@ class CarlaEnv(gym.Env):
     return obs
 
   def _get_reward(self, step):
-      """Calculate the reward based on waypoint following and log key information for debugging."""
-      # Reward for speed tracking
-      v = self.ego.get_velocity()
-      speed = np.sqrt(v.x**2 + v.y**2)
-      r_speed = -abs(speed - self.desired_speed)
-      
-      # Reward for collision
-      r_collision = 0
-      if self.collision_detector.get_latest_collision_intensity() is not None:
-        r_collision = -1
+    """Calculate the reward based on waypoint following and log key information for debugging."""
+    # Extract state variables
+    obs = self._get_obs()
+    lateral_dis, delta_yaw, speed, vehicle_front = obs['state']
 
-      # Reward for steering:
-      r_steer = -self.ego.get_control().steer**2
+    # Reward for maintaining lane center
+    r_lane = -abs(lateral_dis)  # Penalize large lateral distances
 
-      # Reward for out of lane
-      ego_x, ego_y = get_pos(self.ego)
-      dis, w = get_lane_dis(self.waypoints, ego_x, ego_y)
-      r_out = 0
-      if abs(dis) > self.out_lane_thres:
-        r_out = -1
+    # Reward for aligning with lane direction
+    r_heading = -abs(delta_yaw)  # Penalize large heading errors
 
-      # Longitudinal speed
-      lspeed = np.array([v.x, v.y])
-      lspeed_lon = np.dot(lspeed, w)
+    # Reward for maintaining desired speed
+    r_speed = -abs(speed - self.desired_speed)  # Penalize deviations from desired speed
 
-      # Cost for too fast
-      r_fast = 0
-      if lspeed_lon > self.desired_speed:
-        r_fast = -1
+    # Penalty for collisions
+    r_collision = 0
+    if self.collision_detector.get_latest_collision_intensity() is not None:
+        r_collision = -10  # High penalty for collisions
 
-      # Cost for lateral acceleration
-      r_lat = - abs(self.ego.get_control().steer) * lspeed_lon**2
+    # Penalty for being too close to the vehicle in front
+    r_proximity = 0
+    safe_distance = 5  # Example safe distance in meters
+    if vehicle_front > 0 and vehicle_front < safe_distance:
+        r_proximity = -5 * (safe_distance - vehicle_front)  # Penalize more as distance decreases
 
-      # Total reward combination
-      total_reward = 200*r_collision + 1*lspeed_lon + 10*r_fast + 1*r_out + r_steer*5 + 0.2*r_lat - 0.1
+    # Penalize sharp yaw changes
+    r_smooth_yaw = 0
+    if hasattr(self, 'previous_yaw'):
+        current_yaw = delta_yaw
+        r_smooth_yaw = -abs(current_yaw - self.previous_yaw)  # Penalize abrupt yaw changes
+        self.previous_yaw = current_yaw  # Update previous yaw
+    else:
+        self.previous_yaw = delta_yaw
 
-      # Log reward components to TensorBoard
-      reward_components = {
-        "speed_reward": r_speed,
-        "collision_reward": r_collision,
-        "steering_reward": r_steer,
-        "out_of_lane_reward": r_out,
-        "too_fast_reward": r_fast,
-        "lateral_acceleration_reward": r_lat,
-        "total_reward": total_reward
-      }
+    # Penalize sharp steering changes
+    r_smooth_steering = 0
+    if hasattr(self, 'previous_steer'):
+        current_steer = self.ego.get_control().steer
+        r_smooth_steering = -abs(current_steer - self.previous_steer)  # Penalize abrupt steering changes
+        self.previous_steer = current_steer  # Update previous steer
+    else:
+        self.previous_steer = self.ego.get_control().steer
 
-      return total_reward, reward_components
+    # Penalty for lateral acceleration
+    v = self.ego.get_velocity()
+    lspeed = np.array([v.x, v.y])
+    lspeed_lon = np.dot(lspeed, np.array([np.cos(delta_yaw), np.sin(delta_yaw)]))
+    r_lateral_acc = -abs(self.ego.get_control().steer) * lspeed_lon**2
+
+    # Total reward combination
+    total_reward = (
+      10 * r_lane +         # Encourage staying in the lane
+      5 * r_heading +       # Encourage proper lane alignment
+      1 * r_speed +         # Encourage maintaining the desired speed
+      200 * r_collision +   # Penalize collisions heavily
+      r_proximity +         # Penalize unsafe distances
+      5 * r_steer +         # Penalize aggressive steering
+      0.2 * r_lateral_acc   # Penalize lateral acceleration
+    )
+
+    # Log reward components to TensorBoard
+    reward_components = {
+      "lane_reward": r_lane,
+      "heading_reward": r_heading,
+      "speed_reward": r_speed,
+      "collision_reward": r_collision,
+      "proximity_reward": r_proximity,
+      "steering_penalty": r_steer,
+      "lateral_acceleration_penalty": r_lateral_acc,
+      "total_reward": total_reward
+    }
+    if self.writer:
+        for key, value in reward_components.items():
+            self.writer.add_scalar(f"Reward/{key}", value, self.total_step)
+
+    return total_reward, reward_components
 
   def _terminal(self):
     """Calculate whether to terminate the current episode."""

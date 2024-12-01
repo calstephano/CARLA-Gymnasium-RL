@@ -367,15 +367,20 @@ class CarlaEnv(gym.Env):
       sys.stdout.write('\r' + f"Step: {step} | Pos: {car_pos} | Yaw: {car_yaw:.2f}° | Speed: {speed:.2f} m/s | ")
       sys.stdout.flush()
 
-      # Return reward and components for further processing
-      return total_reward, {
-          "lane_centering_reward": r_lane_centering,
-          "out_of_lane_penalty": r_out,
-          "progress_reward": r_progress,
-          "smooth_steering_penalty": r_smooth_steering,
-          "speed_reward": r_speed,
-          "total_reward": total_reward
+      # Total reward combines progress, lane-centering, smooth steering, and speed rewards
+      total_reward = r_progress + r_lane_centering + r_out + r_smooth_steering + r_speed
+
+      # Log reward components to TensorBoard
+      reward_components = {
+        "lane_centering_reward": r_lane_centering,
+        "out_of_lane_penalty": r_out,
+        "progress_reward": r_progress,
+        "smooth_steering_penalty": r_smooth_steering,
+        "speed_reward": r_speed,
+        "total_reward": total_reward
       }
+
+      return total_reward, reward_components
 
 
   def _terminal(self):

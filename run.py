@@ -3,6 +3,7 @@
 # This work is licensed under the terms of the MIT license.
 # For a copy, see <https://opensource.org/licenses/MIT>.
 
+import os
 import gymnasium as gym
 import gym_carla
 from stable_baselines3 import DQN, PPO, SAC
@@ -55,14 +56,24 @@ def main():
     print("Invalid input. Defaulting to DQN.")
     model_type = 'DQN'
 
-  # Initialize the TensorBoard writer
-  writer = SummaryWriter(log_dir=f"./tensorboard/{model_type}/reward_logs/")
+  # Initialize base log directory
+  base_log_dir = f"./tensorboard/{model_type}"
+
+  # Find the next trial number
+  trial_number = len([d for d in os.listdir(base_log_dir) if os.path.isdir(os.path.join(base_log_dir, d)) and d.startswith(model_type)]) + 1
+  
+  # Initialize reward directory
+  reward_log_dir = f"{base_log_dir}/Reward_Logs_{trial_number}"
+  os.makedirs(reward_log_dir, exist_ok=True)
+
+  # Initialize the TensorBoard writer for rewards
+  writer = SummaryWriter(log_dir=reward_log_dir)
 
   # Initialize the environment
   env = gym.make('carla-v0', params=params, writer=writer)
 
   # Initialize the model
-  model = select_model(env, model_type, 'CnnPolicy', verbose=1, tensorboard_log=f"./tensorboard/{model_type}/")
+  model = select_model(env, model_type, 'CnnPolicy', verbose=1, tensorboard_log=base_log_dir)
 
   # Train the model
   model.learn(total_timesteps=10000)
@@ -80,9 +91,6 @@ def select_model(env, model_type, policy_type, **kwargs):
       policy_type, 
       env, 
       buffer_size=50_000, 
-      exploration_initial_eps=1.0,  # Start with 100% exploration
-      exploration_final_eps=0.05,   # End with 5% exploration
-      exploration_fraction=0.8,     # Decay over 80% of training timesteps
       **kwargs
     )
   elif model_type == 'SAC':

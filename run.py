@@ -58,6 +58,7 @@ def main():
 
   # Initialize base log directory
   base_log_dir = f"./tensorboard/{model_type}"
+  os.makedirs(base_log_dir, exist_ok=True)
 
   # Find the next trial number
   trial_number = len([d for d in os.listdir(base_log_dir) if os.path.isdir(os.path.join(base_log_dir, d)) and d.startswith(model_type)]) + 1
@@ -65,7 +66,7 @@ def main():
   # Initialize reward directory
   reward_log_dir = f"{base_log_dir}/Reward_Logs_{trial_number}"
   os.makedirs(reward_log_dir, exist_ok=True)
-
+  
   # Initialize the TensorBoard writer for rewards
   writer = SummaryWriter(log_dir=reward_log_dir)
 

@@ -330,57 +330,49 @@ class CarlaEnv(gym.Env):
 
   def _get_reward(self, step):
       """Calculate the reward based on waypoint following and log key information for debugging."""
-      ego_x, ego_y = get_pos(self.ego)
-
-      # Use a look-ahead waypoint for smoother navigation
-      look_ahead_index = 5
-      target_waypoint = self.waypoints[min(look_ahead_index, len(self.waypoints) - 1)]
-
-      # Calculate distance and alignment to the waypoint
-      dis, w = get_lane_dis([target_waypoint], ego_x, ego_y)
-
-      # Vehicle and waypoint debugging
-      car_pos = (ego_x, ego_y)
-      car_yaw = self.ego.get_transform().rotation.yaw
-      waypoint_pos = (target_waypoint[0], target_waypoint[1])
-      waypoint_yaw = target_waypoint[2]
-      yaw_diff = abs(car_yaw - waypoint_yaw)
-      yaw_diff = min(yaw_diff, 360 - yaw_diff)
-
-      # Reward components
-      r_lane_centering = 20 - 40 * abs(dis)
-      r_out = -100 if abs(dis) > self.out_lane_thres else 0
-      prev_dis = getattr(self, 'prev_distance', None)
-      r_progress = max(0, prev_dis - dis) if prev_dis is not None else 0
-      self.prev_distance = dis
-      steer = abs(self.ego.get_control().steer)
-      r_smooth_steering = -steer**2 * 5
+      # Reward for speed tracking
       v = self.ego.get_velocity()
       speed = np.sqrt(v.x**2 + v.y**2)
       r_speed = -abs(speed - self.desired_speed)
-      if speed < 1.0:
-          r_speed -= 10
-
+      
       # Reward for collision
       r_collision = 0
       if self.collision_detector.get_latest_collision_intensity() is not None:
-          r_collision = -1
+        r_collision = -1
 
-      # Log to the same line
-      # sys.stdout.write('\r' + f"Car Pos: {car_pos} | Car Yaw: {car_yaw:.2f}°")
-      sys.stdout.write('\r' + f"Car Yaw: {car_yaw:.2f}° | Waypoint Yaw: {waypoint_yaw:.2f}°")
-      sys.stdout.flush()
+      # Reward for steering:
+      r_steer = -self.ego.get_control().steer**2
+
+      # Reward for out of lane
+      ego_x, ego_y = get_pos(self.ego)
+      dis, w = get_lane_dis(self.waypoints, ego_x, ego_y)
+      r_out = 0
+      if abs(dis) > self.out_lane_thres:
+        r_out = -1
+
+      # Longitudinal speed
+      lspeed = np.array([v.x, v.y])
+      lspeed_lon = np.dot(lspeed, w)
+
+      # Cost for too fast
+      r_fast = 0
+      if lspeed_lon > self.desired_speed:
+        r_fast = -1
+
+      # Cost for lateral acceleration
+      r_lat = - abs(self.ego.get_control().steer) * lspeed_lon**2
 
       # Total reward combination
-      total_reward = r_collision+ r_progress + r_lane_centering + r_out + r_smooth_steering + r_speed
+      total_reward = 200*r_collision + 1*lspeed_lon + 10*r_fast + 1*r_out + r_steer*5 + 0.2*r_lat - 0.1
 
       # Log reward components to TensorBoard
       reward_components = {
-        "lane_centering_reward": r_lane_centering,
-        "out_of_lane_penalty": r_out,
-        "progress_reward": r_progress,
-        "smooth_steering_penalty": r_smooth_steering,
         "speed_reward": r_speed,
+        "collision_reward": r_collision,
+        "steering_reward": r_steer,
+        "out_of_lane_reward": r_out,
+        "too_fast_reward": r_fast,
+        "lateral_acceleration_reward": r_lat,
         "total_reward": total_reward
       }
 

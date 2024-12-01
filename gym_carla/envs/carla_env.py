@@ -333,7 +333,7 @@ class CarlaEnv(gym.Env):
       ego_x, ego_y = get_pos(self.ego)
 
       # Use a look-ahead waypoint for smoother navigation
-      look_ahead_index = 2
+      look_ahead_index = 5
       target_waypoint = self.waypoints[min(look_ahead_index, len(self.waypoints) - 1)]
 
       # Calculate distance and alignment to the waypoint
@@ -361,14 +361,18 @@ class CarlaEnv(gym.Env):
       if speed < 1.0:
           r_speed -= 10
 
-      total_reward = r_progress + r_lane_centering + r_out + r_smooth_steering + r_speed
+      # Reward for collision
+      r_collision = 0
+      if self.collision_detector.get_latest_collision_intensity() is not None:
+          r_collision = -1
 
       # Log to the same line
-      sys.stdout.write('\r' + f"Step: {step} | Pos: {car_pos} | Yaw: {car_yaw:.2f}° | Speed: {speed:.2f} m/s | ")
+      # sys.stdout.write('\r' + f"Car Pos: {car_pos} | Car Yaw: {car_yaw:.2f}°")
+      sys.stdout.write('\r' + f"Car Yaw: {car_yaw:.2f}° | Waypoint Yaw: {waypoint_yaw:.2f}°")
       sys.stdout.flush()
 
-      # Total reward combines progress, lane-centering, smooth steering, and speed rewards
-      total_reward = r_progress + r_lane_centering + r_out + r_smooth_steering + r_speed
+      # Total reward combination
+      total_reward = r_collision+ r_progress + r_lane_centering + r_out + r_smooth_steering + r_speed
 
       # Log reward components to TensorBoard
       reward_components = {
@@ -381,7 +385,6 @@ class CarlaEnv(gym.Env):
       }
 
       return total_reward, reward_components
-
 
   def _terminal(self):
     """Calculate whether to terminate the current episode."""

@@ -19,7 +19,7 @@ def main():
     'dt': 0.1,                                  # Time interval between two frames
     'discrete': True,                           # Whether to use discrete control space
     'discrete_acc': [-3.0, 0.0, 3.0],           # Discrete value of accelerations
-    'discrete_steer': [-0.2, 0.0, 0.2],         # Discrete value of steering angles
+    'discrete_steer': [-0.05, 0.0, 0.05],       # Discrete value of steering angles
     'continuous_accel_range': [-3.0, 3.0],      # Continuous acceleration range
     'continuous_steer_range': [-0.3, 0.3],      # Continuous steering angle range
     'ego_vehicle_filter': 'vehicle.lincoln*',   # Filter for defining ego vehicle

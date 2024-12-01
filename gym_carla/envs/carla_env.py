@@ -163,27 +163,6 @@ class CarlaEnv(gym.Env):
     self.collision_detector.clear_collision_history()
     self.camera_sensors.spawn_and_attach(self.ego)
 
-    #self.lidar_sensor.spawn_and_attach(self.ego)
-    #self.radar_sensor.spawn_and_attach(self.ego)
-
-    # def run_open3d():
-    #   self.vis = o3d.visualization.Visualizer()
-    #   self.vis.create_window(
-    #       window_name='Carla Lidar',
-    #       width=540,
-    #       height=540,
-    #       left=480,
-    #       top=270, visible=False)
-    #   self.vis.get_render_option().background_color = [0.05, 0.05, 0.05]
-    #   self.vis.get_render_option().point_size = 1
-    #   self.vis.get_render_option().show_coordinate_frame = True
-    #
-    #   self.frame = 0
-    #   self.dt0 = datetime.now()
-    #
-    # thread_open3d = threading.Thread(target=run_open3d)
-    # thread_open3d.start()
-
     # Update timesteps
     self.time_step=0
     self.reset_step+=1
@@ -222,28 +201,8 @@ class CarlaEnv(gym.Env):
     act = carla.VehicleControl(throttle=float(throttle), steer=float(-steer), brake=float(brake))
     self.ego.apply_control(act)
 
-    # def update_open3d():
-    #   if self.frame == 2:
-    #       self.vis.add_geometry(self.point_list)
-    #   self.vis.update_geometry(self.point_list)
-
-    #   self.vis.poll_events()
-    #   self.vis.update_renderer()
-    #   self.vis.capture_screen_image(filename="lidar_temp_img.png")
-
-    # thread_update3d = threading.Thread(target=update_open3d)
-    # thread_update3d.start()
-         # This can fix Open3D jittering issues:
-    # time.sleep(0.005)
-
     # Tick the world
     self.world.tick()
-
-    # process_time = datetime.now() - self.dt0
-    #sys.stdout.write('\r' + 'FPS: ' + str(1.0 / process_time.total_seconds()))
-    #sys.stdout.flush()
-    #self.dt0 = datetime.now()
-    #self.frame += 1
 
     # Append actors polygon list
     vehicle_poly_dict = get_actor_polygons(self.world, 'vehicle.*')
@@ -371,11 +330,29 @@ class CarlaEnv(gym.Env):
 
   def _get_reward(self, step):
     """Calculate the step reward based on waypoint following and log components to TensorBoard."""
-    # Get the ego vehicle's position
     ego_x, ego_y = get_pos(self.ego)
 
-    # Calculate the distance to the closest waypoint and alignment vector
-    dis, w = get_lane_dis(self.waypoints, ego_x, ego_y)
+    # Look-ahead index: How far ahead to target the waypoint
+    look_ahead_index = 2
+    target_waypoint = self.waypoints[min(look_ahead_index, len(self.waypoints) - 1)]
+
+    # Debugging: Inspect target waypoint structure
+    print(f"Target Waypoint (raw): {target_waypoint}")
+
+    # Ensure target waypoint includes (x, y, yaw)
+    dis, w = get_lane_dis([target_waypoint], ego_x, ego_y)
+
+    print(f"Distance to Target Waypoint: {dis}")
+    print(f"Alignment Vector w: {w}")
+
+    # Proceed with reward calculations (add your logic here)
+
+    print(f"Distance to Look-Ahead Waypoint: {dis}")
+    car_yaw = self.ego.get_transform().rotation.yaw
+    waypoint_yaw = target_waypoint[2]  # Use yaw from the waypoint
+    yaw_diff = abs(car_yaw - waypoint_yaw)
+    yaw_diff = min(yaw_diff, 360 - yaw_diff)  # Handle wraparound
+    print(f"Car Yaw: {car_yaw}, Target Yaw: {waypoint_yaw}, Yaw Diff: {yaw_diff}")
 
     # Reward for staying close to the lane center (encourages waypoint following)
     r_lane_centering = 20 - 40 * abs(dis)  # High reward near center, penalize deviation

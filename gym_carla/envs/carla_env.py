@@ -66,13 +66,6 @@ class CarlaEnv(gym.Env):
       params['continuous_steer_range'][0]]), np.array([params['continuous_accel_range'][1],
       params['continuous_steer_range'][1]]), dtype=np.float32)  # acc, steer
 
-    # # Observation space
-    # self.observation_space = spaces.Box(
-    #   low=0, high=255,
-    #   shape=(4, self.obs_size, self.obs_size),
-    #   dtype=np.uint8
-    # )
-
     self.observation_space = spaces.Dict({
       'camera': spaces.Box(
         low=0, high=255, 

@@ -66,12 +66,24 @@ class CarlaEnv(gym.Env):
       params['continuous_steer_range'][0]]), np.array([params['continuous_accel_range'][1],
       params['continuous_steer_range'][1]]), dtype=np.float32)  # acc, steer
 
-    # Observation space
-    self.observation_space = spaces.Box(
-      low=0, high=255,
-      shape=(4, self.obs_size, self.obs_size),
-      dtype=np.uint8
-    )
+    # # Observation space
+    # self.observation_space = spaces.Box(
+    #   low=0, high=255,
+    #   shape=(4, self.obs_size, self.obs_size),
+    #   dtype=np.uint8
+    # )
+
+    self.observation_space = spaces.Dict({
+      'camera': spaces.Box(
+        low=0, high=255, 
+        shape=(4, self.obs_size, self.obs_size), 
+        dtype=np.uint8),
+      'state': spaces.Box(
+        low=-np.inf, high=np.inf, 
+        shape=(4,), 
+        dtype=np.float32),
+    })
+    print(self.observation_space)
 
     # Connect to CARLA server and get world object
     print('Connecting to CARLA server...')
@@ -319,14 +331,26 @@ class CarlaEnv(gym.Env):
     self.camera_sensors.display_camera_img(self.display)
     pygame.display.flip()
 
+    # State observation
+    ego_trans = self.ego.get_transform()
+    ego_x = ego_trans.location.x
+    ego_y = ego_trans.location.y
+    ego_yaw = ego_trans.rotation.yaw/180*np.pi                          # Convert yaw to radians
+    lateral_dis, w = get_preview_lane_dis(self.waypoints, ego_x, ego_y) # Calculate lateral distance and heading error to lane center
+    delta_yaw = np.arcsin(np.cross(w, 
+      np.array(np.array([np.cos(ego_yaw), np.sin(ego_yaw)]))))
+    v = self.ego.get_velocity()   
+    speed = np.sqrt(v.x**2 + v.y**2)
+    state = np.array([lateral_dis, - delta_yaw, speed, self.vehicle_front])
+
     # Retrieve optimized camera images for RL
     camera_images = self.camera_sensors.camera_img
     obs = {
       'camera':camera_images,
-      'birdeye':birdeye.astype(np.uint8)
+      'state':state
     }
 
-    return (obs['camera'])
+    return obs
 
   def _get_reward(self, step):
       """Calculate the reward based on waypoint following and log key information for debugging."""

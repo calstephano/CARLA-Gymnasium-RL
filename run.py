@@ -6,8 +6,9 @@
 import os
 import gymnasium as gym
 import gym_carla
-from stable_baselines3 import DQN, PPO, SAC
 from torch.utils.tensorboard import SummaryWriter
+from gym_carla.policies import QValuePolicy, ActorCriticPolicy
+from stable_baselines3 import DQN, PPO, SAC
 
 def main():
   # Define environment parameters
@@ -74,7 +75,7 @@ def main():
   env = gym.make('carla-v0', params=params, writer=writer)
 
   # Initialize the model
-  model = select_model(env, model_type, 'CnnPolicy', verbose=1, tensorboard_log=base_log_dir)
+  model = select_model(env, model_type, policy_type, verbose=1, tensorboard_log=base_log_dir)
 
   # Train the model
   model.learn(total_timesteps=10000)
@@ -89,7 +90,7 @@ def select_model(env, model_type, policy_type, **kwargs):
   """Select the appropriate model based on the user's choice."""
   if model_type == 'DQN':
     return DQN(
-      policy_type, 
+      QValuePolicy, 
       env, 
       buffer_size=50_000, 
       **kwargs

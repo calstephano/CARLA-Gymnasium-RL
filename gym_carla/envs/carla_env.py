@@ -354,18 +354,16 @@ class CarlaEnv(gym.Env):
     lane_width = 2.0
     max_delta_yaw = np.pi / 4
 
-    # Reward for staying in the lane center
-    r_lane = -abs(lateral_dis / lane_width)
+    # Dynamically retrieve lane width from the map
+    ego_location = self.ego.get_location()
+    ego_waypoint = self.world.get_map().get_waypoint(ego_location)
+    lane_width = ego_waypoint.lane_width if ego_waypoint else 2.0  # Default to 2.0 if unavailable
 
-    # Reward for aligning with the lane direction
-    r_heading = -abs(delta_yaw / max_delta_yaw)
-
-    # Reward for maintaining desired speed
-    r_speed = -abs((speed - self.desired_speed) / self.desired_speed)
-
-    # Penalty for collisions
-    r_collision = -50 if self.collision_detector.get_latest_collision_intensity() else 0
-
+    # Reward components
+    r_lane = -abs(lateral_dis / lane_width)  # Penalize deviation from lane center
+    r_heading = -abs(delta_yaw / (np.pi / 4))  # Penalize large heading errors
+    r_speed = -abs((speed - self.desired_speed) / self.desired_speed)  # Penalize speed deviations
+    r_collision = -50 if self.collision_detector.get_latest_collision_intensity() else 0  # Heavy collision penalty
     # Penalize abrupt yaw changes
     r_smooth_yaw = -abs(delta_yaw - getattr(self, 'previous_yaw', delta_yaw)) / max_delta_yaw
     self.previous_yaw = delta_yaw
@@ -381,12 +379,15 @@ class CarlaEnv(gym.Env):
     if self.waypoints:
         ego_x, ego_y = get_pos(self.ego)
         waypoint_x, waypoint_y = self.waypoints[0][:2]
-        distance_to_waypoint = np.linalg.norm([ego_x - waypoint_x, ego_y - waypoint_y])
 
-        progress_reward = 5 if distance_to_waypoint < getattr(self, 'previous_distance_to_waypoint', float('inf')) else -1
+        # Reward for reducing distance to the next waypoint
+        distance_to_waypoint = np.linalg.norm([ego_x - waypoint_x, ego_y - waypoint_y])
+        previous_distance = getattr(self, 'previous_distance_to_waypoint', float('inf'))
+        progress_reward = 5 if distance_to_waypoint < previous_distance else -1
         self.previous_distance_to_waypoint = distance_to_waypoint
 
-        if distance_to_waypoint < 1.0:
+        # Bonus for reaching the waypoint
+        if distance_to_waypoint < 1.0:  # Within 1 meter
             progress_reward += 10
             self.waypoints.pop(0)
 
@@ -411,7 +412,6 @@ class CarlaEnv(gym.Env):
             "speed_reward": r_speed,
             "collision_reward": r_collision,
             "smooth_yaw_penalty": r_smooth_yaw,
-            "smooth_steering_penalty": r_smooth_steering,
             "lateral_acceleration_penalty": r_lateral_acc,
             "progress_reward": progress_reward,
             "total_reward": total_reward

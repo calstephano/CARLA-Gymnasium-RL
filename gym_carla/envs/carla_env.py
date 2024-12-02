@@ -333,7 +333,7 @@ class CarlaEnv(gym.Env):
       np.array(np.array([np.cos(ego_yaw), np.sin(ego_yaw)]))))
     v = self.ego.get_velocity()   
     speed = np.sqrt(v.x**2 + v.y**2)
-    state = np.array([lateral_dis, - delta_yaw, speed, self.vehicle_front])
+    state = np.array([lateral_dis, - delta_yaw, speed, self.vehicle_front],dtype=np.float32)
 
     # Retrieve optimized camera images for RL
     camera_images = self.camera_sensors.camera_img

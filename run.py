@@ -7,7 +7,7 @@ import os
 import gymnasium as gym
 import gym_carla
 from torch.utils.tensorboard import SummaryWriter
-from gym_carla.policies import *
+#from gym_carla.policies import *
 from stable_baselines3 import DQN, PPO, SAC
 
 def main():

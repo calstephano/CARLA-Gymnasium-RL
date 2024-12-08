@@ -5,6 +5,7 @@
 
 import os
 import gymnasium as gym
+import carla
 import gym_carla
 from torch.utils.tensorboard import SummaryWriter
 from stable_baselines3 import DQN, PPO, SAC
@@ -28,7 +29,6 @@ def main():
     'max_time_episode': 1000,                   # Maximum timesteps per episode
     'max_waypt': 12,                            # Maximum number of waypoints
     'obs_range': 32,                            # Observation range (meter)
-    'lidar_bin': 0.125,                         # Bin size of LIDAR sensor (meter)
     'd_behind': 12,                             # Distance behind the ego vehicle (meter)
     'out_lane_thres': 2.0,                      # Threshold for out of lane
     'desired_speed': 8,                         # Desired speed (m/s)
@@ -64,14 +64,18 @@ def main():
   trial_number = len([d for d in os.listdir(base_log_dir) if os.path.isdir(os.path.join(base_log_dir, d)) and d.startswith(model_type)]) + 1
 
   # Initialize reward directory
-  reward_log_dir = f"{base_log_dir}/Reward_Logs_{trial_number}"
+  reward_log_dir = f"{base_log_dir}/reward_logs_{trial_number}"
   os.makedirs(reward_log_dir, exist_ok=True)
+
+  # Create a video directory using the same trial number
+  playback_dir = f"{base_log_dir}/playback_{trial_number}"
+  os.makedirs(playback_dir, exist_ok=True)
 
   # Initialize the TensorBoard writer for rewards
   writer = SummaryWriter(log_dir=reward_log_dir)
 
   # Initialize the environment
-  env = gym.make('carla-v0', params=params, writer=writer)
+  env = gym.make('carla-v0', params=params, writer=writer, playback_dir=playback_dir)
 
   # Initialize the model
   model = select_model(env, model_type, verbose=1, tensorboard_log=base_log_dir)
@@ -114,10 +118,10 @@ def test_model(model, env, writer, steps=100, test_episode=0):
     cumulative_reward += reward
 
     if terminated or truncated:
-        print(f"Episode {test_episode} finished after {step + 1} steps with reward {cumulative_reward}.")
-        writer.add_scalar("Test/Cumulative Reward", cumulative_reward, test_episode)
-        writer.add_scalar("Test/Episode Length", step + 1, test_episode)
-        break
+      print(f"Episode {test_episode} finished after {step + 1} steps with reward {cumulative_reward}.")
+      writer.add_scalar("test/cumulative reward", cumulative_reward, test_episode)
+      writer.add_scalar("test/episode length", step + 1, test_episode)
+      break
   print("Testing finished.")
 
 if __name__ == '__main__':

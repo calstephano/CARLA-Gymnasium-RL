@@ -263,18 +263,16 @@ class CarlaEnv(gym.Env):
     # Lane positioning
     r_lane = -abs(lateral_dis / lane_width)
     if abs(lateral_dis) <= lane_width * 0.25:   # Centered within 25% of lane width
-        r_lane += 1                             # Positive reward for staying in the center
-    elif abs(lateral_dis) <= lane_width * 0.5:  # Within half the lane width
-        r_lane += 0.5                           # Smaller reward for staying within half of the lane width
-
-    # Heading
-    max_delta_yaw = np.pi / 4
-    r_heading = -abs(delta_yaw / max_delta_yaw)
+      r_lane += 0.5                             # Positive reward for staying in the center
 
     # Speed
     r_speed = -abs((speed - self.desired_speed) / self.desired_speed)  # Penalize speed deviations
     if abs(lateral_dis) > lane_width * 0.5:                            # Dynamic speed reward
       r_speed -= 1                                                     # Penalize high speed when off-center
+
+    # Heading
+    max_delta_yaw = np.pi / 4
+    r_heading = -abs(delta_yaw / max_delta_yaw)
 
     # Yaw changes
     r_smooth_yaw = -abs(delta_yaw - getattr(self, 'previous_yaw', delta_yaw)) / max_delta_yaw
@@ -291,24 +289,27 @@ class CarlaEnv(gym.Env):
         # Reward for reducing distance to the next waypoint
         distance_to_waypoint = np.linalg.norm([ego_x - waypoint_x, ego_y - waypoint_y])
         previous_distance = getattr(self, 'previous_distance_to_waypoint', float('inf'))
-        progress_reward = 5 if distance_to_waypoint < previous_distance else -1
+        if distance_to_waypoint < previous_distance:
+          progress_reward = 1 
+        else:
+          progress_reward = -1
         self.previous_distance_to_waypoint = distance_to_waypoint
 
         # Bonus for reaching the waypoint
         if distance_to_waypoint < 1.0:  # Within 1 meter
-          progress_reward += 10
+          progress_reward += 5
           self.waypoints.pop(0)
       else:
         # Penalize for making progress while off-lane
-        progress_reward = -5
+        progress_reward = -1
 
     # Combine rewards
     total_reward = (
       50 * r_collision +
       10 * r_lane +
       5 * r_heading +
-      2 * r_speed +
-      2 * r_smooth_yaw +
+      5 * r_smooth_yaw +
+      0.2 * r_speed +
       progress_reward
     )
     total_reward = np.clip(total_reward, -100, 100)
@@ -319,7 +320,6 @@ class CarlaEnv(gym.Env):
         "collision_reward": r_collision,
         "lane_reward": r_lane,
         "heading_reward": r_heading,
-        "speed_reward": r_speed,
         "smooth_yaw_penalty": r_smooth_yaw,
         "progress_reward": progress_reward,
         "total_reward": total_reward

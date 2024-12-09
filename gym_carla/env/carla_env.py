@@ -249,83 +249,83 @@ class CarlaEnv(gym.Env):
     obs = self._get_obs()
     lateral_dis, delta_yaw, speed, vehicle_front = obs['state']
 
-    max_delta_yaw = np.pi / 4
+    # Collision
+    if self.collision_detector.get_latest_collision_intensity():
+      r_collision = -1 
+    else:
+      r_collision = 0
 
     # Dynamically retrieve lane width from the map
     ego_location = self.ego.get_location()
     ego_waypoint = self.world.get_map().get_waypoint(ego_location)
     lane_width = ego_waypoint.lane_width if ego_waypoint else 2.0
 
-    # Reward components
-    r_lane = -abs(lateral_dis / lane_width)    # Penalize deviation from lane center
-    r_heading = -abs(delta_yaw / (np.pi / 4))  # Penalize large heading errors
+    # Lane positioning
+    r_lane = -abs(lateral_dis / lane_width)
+    if abs(lateral_dis) <= lane_width * 0.25:   # Centered within 25% of lane width
+        r_lane += 1                             # Positive reward for staying in the center
+    elif abs(lateral_dis) <= lane_width * 0.5:  # Within half the lane width
+        r_lane += 0.5                           # Smaller reward for staying within half of the lane width
 
-    # Speed reward
+    # Heading
+    max_delta_yaw = np.pi / 4
+    r_heading = -abs(delta_yaw / max_delta_yaw)
+
+    # Speed
     r_speed = -abs((speed - self.desired_speed) / self.desired_speed)  # Penalize speed deviations
     if abs(lateral_dis) > lane_width * 0.5:                            # Dynamic speed reward
-        r_speed -= 1                                                   # Penalize high speed when off-center
+      r_speed -= 1                                                     # Penalize high speed when off-center
 
-    r_collision = -1 if self.collision_detector.get_latest_collision_intensity() else 0  # Heavy collision penalty
-
-    # Penalize abrupt yaw changes
+    # Yaw changes
     r_smooth_yaw = -abs(delta_yaw - getattr(self, 'previous_yaw', delta_yaw)) / max_delta_yaw
     self.previous_yaw = delta_yaw
-
-    # Penalize lateral acceleration
-    current_steer = self.ego.get_control().steer
-    v = self.ego.get_velocity()
-    lspeed_lon = np.dot([v.x, v.y], [np.cos(delta_yaw), np.sin(delta_yaw)])
-    r_lateral_acc = -abs(current_steer) * (lspeed_lon**2 / self.desired_speed**2)
 
     # Reward for waypoint progress
     progress_reward = 0
     if self.waypoints:
-        ego_x, ego_y = get_pos(self.ego)
-        waypoint_x, waypoint_y = self.waypoints[0][:2]
+      ego_x, ego_y = get_pos(self.ego)
+      waypoint_x, waypoint_y = self.waypoints[0][:2]
 
-        # Reward progress only if the vehicle is within a reasonable distance from the lane center
-        if abs(lateral_dis) <= lane_width * 0.5:  # Ensure vehicle is within half the lane width
-            # Reward for reducing distance to the next waypoint
-            distance_to_waypoint = np.linalg.norm([ego_x - waypoint_x, ego_y - waypoint_y])
-            previous_distance = getattr(self, 'previous_distance_to_waypoint', float('inf'))
-            progress_reward = 5 if distance_to_waypoint < previous_distance else -1
-            self.previous_distance_to_waypoint = distance_to_waypoint
+      # Reward progress only if the vehicle is within a reasonable distance from the lane center
+      if abs(lateral_dis) <= lane_width * 0.5:
+        # Reward for reducing distance to the next waypoint
+        distance_to_waypoint = np.linalg.norm([ego_x - waypoint_x, ego_y - waypoint_y])
+        previous_distance = getattr(self, 'previous_distance_to_waypoint', float('inf'))
+        progress_reward = 5 if distance_to_waypoint < previous_distance else -1
+        self.previous_distance_to_waypoint = distance_to_waypoint
 
-            # Bonus for reaching the waypoint
-            if distance_to_waypoint < 1.0:  # Within 1 meter
-                progress_reward += 10
-                self.waypoints.pop(0)
-        else:
-            # Penalize for making progress while off-lane
-            progress_reward = -5
+        # Bonus for reaching the waypoint
+        if distance_to_waypoint < 1.0:  # Within 1 meter
+          progress_reward += 10
+          self.waypoints.pop(0)
+      else:
+        # Penalize for making progress while off-lane
+        progress_reward = -5
 
     # Combine rewards
     total_reward = (
-        10 * r_lane +
-        5 * r_heading +
-        2 * r_speed +
-        50 * r_collision +
-        2 * r_smooth_yaw +
-        # 2 * r_smooth_steering +
-        0.5 * r_lateral_acc +
-        progress_reward
+      50 * r_collision +
+      10 * r_lane +
+      5 * r_heading +
+      2 * r_speed +
+      2 * r_smooth_yaw +
+      progress_reward
     )
     total_reward = np.clip(total_reward, -100, 100)
 
     # Log rewards
     if self.writer:
-        reward_components = {
-            "lane_reward": r_lane,
-            "heading_reward": r_heading,
-            "speed_reward": r_speed,
-            "collision_reward": r_collision,
-            "smooth_yaw_penalty": r_smooth_yaw,
-            "lateral_acceleration_penalty": r_lateral_acc,
-            "progress_reward": progress_reward,
-            "total_reward": total_reward
-        }
-        for key, value in reward_components.items():
-            self.writer.add_scalar(f"rewards/{key}", value, self.total_step)
+      reward_components = {
+        "collision_reward": r_collision,
+        "lane_reward": r_lane,
+        "heading_reward": r_heading,
+        "speed_reward": r_speed,
+        "smooth_yaw_penalty": r_smooth_yaw,
+        "progress_reward": progress_reward,
+        "total_reward": total_reward
+      }
+      for key, value in reward_components.items():
+        self.writer.add_scalar(f"rewards/{key}", value, self.total_step)
 
     return total_reward, reward_components
 

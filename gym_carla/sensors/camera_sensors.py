@@ -6,12 +6,13 @@ from skimage.transform import resize
 from gym_carla.display.display_utils import grayscale_to_display_surface
 
 class CameraSensors:
-  def __init__(self, world, obs_size, display_size):
+  def __init__(self, world, obs_size, display_size, window_size=5):
     self.world = world
     self.obs_size = obs_size
     self.display_size = display_size
+    self.window_size = window_size
     self.cameras = []
-    self.camera_img = np.zeros((4, obs_size, obs_size), dtype=np.uint8)  # Cache for resized images
+    self.camera_img = np.zeros((4, window_size, obs_size, obs_size), dtype=np.uint8)
     self.vehicle = None
     self.lock = threading.Lock()
 
@@ -45,9 +46,9 @@ class CameraSensors:
       self.cameras.append(camera)
 
   def _get_camera_img(self, data, index):
-    """Process and store camera sensor data as a preprocessed grayscale image."""
+    """Process and store camera sensor data as a preprocessed grayscale image with a sliding window."""
     # Convert raw data to numpy array and reshape to a 2D image with RGB channels
-    array = np.frombuffer(data.raw_data, dtype = np.dtype("uint8"))
+    array = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
     array = np.reshape(array, (data.height, data.width, 4))[:, :, :3]
     
     # Convert to grayscale
@@ -58,12 +59,14 @@ class CameraSensors:
     
     # Safely update the corresponding index in the cache
     with self.lock:
-      self.camera_img[index] = resized_array
+      # Shift the window for this camera, dropping the oldest image and adding the new one
+      self.camera_img[index] = np.roll(self.camera_img[index], shift=-1, axis=0)
+      self.camera_img[index, -1] = resized_array
 
   def render_camera_img(self, display):
     with self.lock:
       for i, camera_position in enumerate(self.camera_positions):
-        camera_surface = grayscale_to_display_surface(self.camera_img[i], self.display_size)
+        camera_surface = grayscale_to_display_surface(self.camera_img[i, -1], self.display_size)
         display.blit(camera_surface, (self.display_size * (i + 2), 0))
 
   def stop(self):

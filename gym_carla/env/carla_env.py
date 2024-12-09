@@ -42,6 +42,7 @@ class CarlaEnv(gym.Env):
     self.max_ego_spawn_times = params['max_ego_spawn_times']
     self.display_route = params['display_route']
     self.ego_vehicle_filter = params['ego_vehicle_filter']
+    self.window_size = params['window_size']
     self.writer = writer
 
     # Action space
@@ -64,7 +65,7 @@ class CarlaEnv(gym.Env):
         dtype=np.float32),
       'camera': spaces.Box(
         low=0, high=255,
-        shape=(4, self.obs_size, self.obs_size),
+        shape=(4, self.window_size, self.obs_size, self.obs_size),
         dtype=np.uint8),
     })
 
@@ -86,7 +87,7 @@ class CarlaEnv(gym.Env):
 
     # Initialize sensors
     self.collision_detector = CollisionDetector(self.world)
-    self.camera_sensors = CameraSensors(self.world, self.obs_size, self.display_size)
+    self.camera_sensors = CameraSensors(self.world, self.obs_size, self.display_size, window_size=self.window_size)
 
     # Record the time of total steps and resetting steps
     self.reset_step = 0
@@ -119,8 +120,8 @@ class CarlaEnv(gym.Env):
 
     # Spawn the ego vehicle
     ego_vehicle = spawn_ego_vehicle(
-      self.world, self.vehicle_spawn_points, self.vehicle_polygons, 
-      self.max_ego_spawn_times, self.ego_vehicle_filter, 
+      self.world, self.vehicle_spawn_points, self.vehicle_polygons,
+      self.max_ego_spawn_times, self.ego_vehicle_filter,
     )
     if not ego_vehicle:
       print("Failed to spawn ego vehicle. Resetting environment.")

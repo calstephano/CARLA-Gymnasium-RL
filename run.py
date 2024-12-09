@@ -35,6 +35,7 @@ def main():
     'desired_speed': 8,                         # Desired speed (m/s)
     'max_ego_spawn_times': 200,                 # Maximum times to spawn ego vehicle
     'display_route': True,                      # Whether to render the desired route
+    'window_size': 5                            # Size of camera sliding window
   }
 
   # Ask the user to select the training algorithm

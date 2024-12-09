@@ -107,7 +107,7 @@ def select_model(env, model_type, **kwargs):
   else:
     raise ValueError(f"Unsupported model type: {model_type}")
 
-def test_model(model, env, writer, steps=100, test_episode=0):
+def test_model(model, env, writer, steps=1000, test_episode=0):
   """Test the trained model and log performance to TensorBoard."""
   obs, info = env.reset()
   print("Testing started.")

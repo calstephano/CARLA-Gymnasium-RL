@@ -4,6 +4,7 @@ import pygame
 import numpy as np
 from skimage.transform import resize
 from gym_carla.display.display_utils import grayscale_to_display_surface
+import cv2
 
 class CameraSensors:
   def __init__(self, world, obs_size, display_size, window_size=5):

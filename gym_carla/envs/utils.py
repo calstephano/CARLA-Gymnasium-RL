@@ -243,7 +243,6 @@ def get_actor_polygons(world, filt):
     dict: A dictionary containing the bounding boxes of specific actors.
   """
   actor_poly_dict = {}
-  flagged_actors = set()  # Keep track of actors with invalid polygons
 
   for actor in world.get_actors().filter(filt):
     try:
@@ -271,9 +270,7 @@ def get_actor_polygons(world, filt):
       if not np.isnan(poly).any():
         actor_poly_dict[actor.id] = poly
       else:
-        if actor.id not in flagged_actors:
-          print(f"[DEBUG] Invalid polygon detected for actor {actor.id} ({actor.type_id}). Contains NaN values.")
-          flagged_actors.add(actor.id)
+        print(f"[DEBUG] Invalid polygon detected for actor {actor.id} ({actor.type_id}). Contains NaN values.")
     except Exception as e:
       print(f"Error processing actor {actor.id}: {e}")
   

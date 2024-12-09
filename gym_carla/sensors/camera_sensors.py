@@ -46,19 +46,48 @@ class CameraSensors:
 
       self.cameras.append(camera)
 
-  def detect_lanes(self, grayscale_image):
-    """Detect lanes in a given grayscale image."""
+  def detect_lanes(self, grayscale_image, camera_index):
+    """Detect lanes in a given grayscale image, customized for different cameras."""
     # Apply Canny Edge Detection
-    edges = cv2.Canny(grayscale_image, 100, 200)
+    edges = cv2.Canny(grayscale_image, 50, 150)
 
-    # Define region of interest (ROI) to focus on the bottom part of the image
+    # Create a mask to define the region of interest (ROI)
     mask = np.zeros_like(edges)
-    polygon = np.array([[
-        (0, grayscale_image.shape[0]),                                        # Bottom-left corner
-        (grayscale_image.shape[1] // 2, int(grayscale_image.shape[0] // 2)),  # Top center
-        (grayscale_image.shape[1], grayscale_image.shape[0])                  # Bottom-right corner
-    ]], np.int32)
-    cv2.fillPoly(mask, polygon, 255)
+
+    if camera_index == 0:  # Front camera
+      # Focus on the lower half of the image
+      polygon = np.array([[
+          (0, grayscale_image.shape[0]),  # Bottom-left corner
+          (grayscale_image.shape[1] // 2, int(grayscale_image.shape[0] // 2)),  # Top-center
+          (grayscale_image.shape[1], grayscale_image.shape[0])  # Bottom-right corner
+      ]], np.int32)
+      cv2.fillPoly(mask, polygon, 255)  # Apply mask to the lower half
+    elif camera_index == 1 or camera_index == 3:  # Left-back and right-back diagonal cameras
+      # Focus on the sides (left and right)
+      polygon_left = np.array([[
+          (0, grayscale_image.shape[0]),
+          (grayscale_image.shape[1] // 3, 0),
+          (grayscale_image.shape[1] // 3, grayscale_image.shape[0])
+      ]], np.int32)
+
+      polygon_right = np.array([[
+          (grayscale_image.shape[1], grayscale_image.shape[0]),
+          (grayscale_image.shape[1] * 2 // 3, 0),
+          (grayscale_image.shape[1] * 2 // 3, grayscale_image.shape[0])
+      ]], np.int32)
+
+      cv2.fillPoly(mask, polygon_left, 255)
+      cv2.fillPoly(mask, polygon_right, 255)
+    elif camera_index == 2:  # Rear camera (focus might need to be adjusted)
+      # The rear camera is tricky; for now, let's just mask the bottom half
+      polygon = np.array([[
+          (0, grayscale_image.shape[0]),
+          (grayscale_image.shape[1] // 2, int(grayscale_image.shape[0] // 2)),
+          (grayscale_image.shape[1], grayscale_image.shape[0])
+      ]], np.int32)
+      cv2.fillPoly(mask, polygon, 255)  # Apply mask to the bottom part
+
+    # Apply the mask to the edges
     roi_edges = cv2.bitwise_and(edges, mask)
 
     # Apply Hough Line Transform to detect lane lines
@@ -86,7 +115,7 @@ class CameraSensors:
     resized_array = resize(gray, (self.obs_size, self.obs_size), preserve_range=True).astype(np.uint8)
 
     # Detect lanes in the resized grayscale image
-    lane_image = self.detect_lanes(resized_array)
+    lane_image = self.detect_lanes(resized_array, index)
     
     # Safely update the corresponding index in the cache
     with self.lock:

@@ -97,16 +97,16 @@ class CameraSensors:
     resized_array = resize(gray, (self.obs_size, self.obs_size), preserve_range=True).astype(np.uint8)
 
     # Detect lanes in the resized grayscale imag only for front camera
-    if index == 0:
-        lane_image = self.detect_lanes(resized_array, index)
-    else:
-        lane_image = resized_array
+    # if index == 0:
+    #     lane_image = self.detect_lanes(resized_array, index)
+    # else:
+    #     lane_image = resized_array
     
     # Safely update the corresponding index in the cache
     with self.lock:
       # Shift the window for this camera, dropping the oldest image and adding the new one
       self.camera_img[index] = np.roll(self.camera_img[index], shift=-1, axis=0)
-      self.camera_img[index, -1] = lane_image
+      self.camera_img[index, -1] = resized_array
 
   def render_camera_img(self, display):
     with self.lock:

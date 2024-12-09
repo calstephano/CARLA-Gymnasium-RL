@@ -46,6 +46,33 @@ class CameraSensors:
 
       self.cameras.append(camera)
 
+  def detect_lanes(self, grayscale_image):
+    """Detect lanes in a given grayscale image."""
+    # Apply Canny Edge Detection
+    edges = cv2.Canny(grayscale_image, 100, 200)
+
+    # Define region of interest (ROI) to focus on the bottom part of the image
+    mask = np.zeros_like(edges)
+    polygon = np.array([[
+        (0, grayscale_image.shape[0]),                                        # Bottom-left corner
+        (grayscale_image.shape[1] // 2, int(grayscale_image.shape[0] // 2)),  # Top center
+        (grayscale_image.shape[1], grayscale_image.shape[0])                  # Bottom-right corner
+    ]], np.int32)
+    cv2.fillPoly(mask, polygon, 255)
+    roi_edges = cv2.bitwise_and(edges, mask)
+
+    # Apply Hough Line Transform to detect lane lines
+    lines = cv2.HoughLinesP(roi_edges, 1, np.pi / 180, threshold=50, minLineLength=100, maxLineGap=50)
+
+    # Draw the detected lanes on the original grayscale image
+    lane_img = grayscale_image.copy()
+    if lines is not None:
+      for line in lines:
+        x1, y1, x2, y2 = line[0]
+        cv2.line(lane_img, (x1, y1), (x2, y2), (255, 0, 0), 3)  # Blue lines for lane markings
+
+    return lane_img
+
   def _get_camera_img(self, data, index):
     """Process and store camera sensor data as a preprocessed grayscale image with a sliding window."""
     # Convert raw data to numpy array and reshape to a 2D image with RGB channels
@@ -53,16 +80,19 @@ class CameraSensors:
     array = np.reshape(array, (data.height, data.width, 4))[:, :, :3]
     
     # Convert to grayscale
-    array = np.mean(array, axis=2).astype(np.uint8)
+    gray = cv2.cvtColor(array, cv2.COLOR_RGB2GRAY)
 
     # Resize the grayscale image to the observation size
-    resized_array = resize(array, (self.obs_size, self.obs_size), preserve_range=True).astype(np.uint8)
+    resized_array = resize(gray, (self.obs_size, self.obs_size), preserve_range=True).astype(np.uint8)
+
+    # Detect lanes in the resized grayscale image
+    lane_image = self.detect_lanes(resized_array)
     
     # Safely update the corresponding index in the cache
     with self.lock:
       # Shift the window for this camera, dropping the oldest image and adding the new one
       self.camera_img[index] = np.roll(self.camera_img[index], shift=-1, axis=0)
-      self.camera_img[index, -1] = resized_array
+      self.camera_img[index, -1] = lane_image
 
   def render_camera_img(self, display):
     with self.lock:

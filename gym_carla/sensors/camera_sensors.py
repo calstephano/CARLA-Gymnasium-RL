@@ -47,60 +47,42 @@ class CameraSensors:
       self.cameras.append(camera)
 
   def detect_lanes(self, grayscale_image, camera_index):
-    """Detect lanes in a given grayscale image, customized for different cameras."""
+    """Detect lanes in a given grayscale image, customized for different cameras and taking angle into account."""
     # Apply Canny Edge Detection
     edges = cv2.Canny(grayscale_image, 50, 150)
 
     # Create a mask to define the region of interest (ROI)
     mask = np.zeros_like(edges)
 
-    if camera_index == 0:  # Front camera
-      # Focus on the lower half of the image
-      polygon = np.array([[
-          (0, grayscale_image.shape[0]),  # Bottom-left corner
-          (grayscale_image.shape[1] // 2, int(grayscale_image.shape[0] // 2)),  # Top-center
-          (grayscale_image.shape[1], grayscale_image.shape[0])  # Bottom-right corner
-      ]], np.int32)
-      cv2.fillPoly(mask, polygon, 255)  # Apply mask to the lower half
-    elif camera_index == 1 or camera_index == 3:  # Left-back and right-back diagonal cameras
-      # Focus on the sides (left and right)
-      polygon_left = np.array([[
-          (0, grayscale_image.shape[0]),
-          (grayscale_image.shape[1] // 3, 0),
-          (grayscale_image.shape[1] // 3, grayscale_image.shape[0])
-      ]], np.int32)
-
-      polygon_right = np.array([[
-          (grayscale_image.shape[1], grayscale_image.shape[0]),
-          (grayscale_image.shape[1] * 2 // 3, 0),
-          (grayscale_image.shape[1] * 2 // 3, grayscale_image.shape[0])
-      ]], np.int32)
-
-      cv2.fillPoly(mask, polygon_left, 255)
-      cv2.fillPoly(mask, polygon_right, 255)
-    elif camera_index == 2:  # Rear camera (focus might need to be adjusted)
-      # The rear camera is tricky; for now, let's just mask the bottom half
-      polygon = np.array([[
-          (0, grayscale_image.shape[0]),
-          (grayscale_image.shape[1] // 2, int(grayscale_image.shape[0] // 2)),
-          (grayscale_image.shape[1], grayscale_image.shape[0])
-      ]], np.int32)
-      cv2.fillPoly(mask, polygon, 255)  # Apply mask to the bottom part
+    # Use a trapezoidal shape to focus on the lanes ahead
+    polygon = np.array([[
+      (0, grayscale_image.shape[0]),                                       # Bottom-left corner
+      (grayscale_image.shape[1] // 4, grayscale_image.shape[0] // 2),      # Top-left part
+      (grayscale_image.shape[1] * 3 // 4, grayscale_image.shape[0] // 2),  # Top-right part
+      (grayscale_image.shape[1], grayscale_image.shape[0])                 # Bottom-right corner
+    ]], np.int32)
+    cv2.fillPoly(mask, polygon, 255)                                         # Apply mask to the region of interest
 
     # Apply the mask to the edges
     roi_edges = cv2.bitwise_and(edges, mask)
 
     # Apply Hough Line Transform to detect lane lines
-    lines = cv2.HoughLinesP(roi_edges, 1, np.pi / 180, threshold=50, minLineLength=100, maxLineGap=50)
+    lines = cv2.HoughLinesP(roi_edges, 1, np.pi / 180, threshold=100, minLineLength=50, maxLineGap=50)
 
-    # Draw the detected lanes on the original grayscale image
+    # Filter lines based on angle
     lane_img = grayscale_image.copy()
     if lines is not None:
       for line in lines:
         x1, y1, x2, y2 = line[0]
-        cv2.line(lane_img, (x1, y1), (x2, y2), (255, 0, 0), 3)  # Blue lines for lane markings
+        # Calculate the angle of the line
+        angle = np.arctan2(y2 - y1, x2 - x1) * 180 / np.pi  # Angle in degrees
+
+        # Filter lines based on angle (e.g., keep lines between -45 and 45 degrees for lane markings)
+        if -45 < angle < 45:
+          cv2.line(lane_img, (x1, y1), (x2, y2), (255, 0, 0), 3)
 
     return lane_img
+
 
   def _get_camera_img(self, data, index):
     """Process and store camera sensor data as a preprocessed grayscale image with a sliding window."""
@@ -114,8 +96,11 @@ class CameraSensors:
     # Resize the grayscale image to the observation size
     resized_array = resize(gray, (self.obs_size, self.obs_size), preserve_range=True).astype(np.uint8)
 
-    # Detect lanes in the resized grayscale image
-    lane_image = self.detect_lanes(resized_array, index)
+    # Detect lanes in the resized grayscale imag only for front camera
+    if index == 0:
+        lane_image = self.detect_lanes(resized_array, index)
+    else:
+        lane_image = resized_array
     
     # Safely update the corresponding index in the cache
     with self.lock:

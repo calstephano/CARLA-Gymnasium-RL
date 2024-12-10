@@ -155,6 +155,7 @@ class CarlaEnv(gym.Env):
     obs = self._get_obs()
     lateral_dis, delta_yaw, speed, vehicle_front = obs['state']
     
+    lateral_dis = abs(lateral_dis)
     # Log the lateral deviation to TensorBoard at each timestep
     if self.writer:
         self.writer.add_scalar('Lateral Deviation', lateral_dis, self.total_step)

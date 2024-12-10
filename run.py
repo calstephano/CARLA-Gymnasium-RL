@@ -105,22 +105,15 @@ def select_model(env, model_type, **kwargs):
     raise ValueError(f"Unsupported model type: {model_type}")
 
 def evaluate_model(model, env, writer, steps=4000):
-    """Test the trained model using evaluate_policy and log performance to TensorBoard."""
-    print("Testing started.")
-    
-    # Evaluate the policy using evaluate_policy
-    mean_reward, std_reward, episode_rewards = evaluate_policy(model, env, n_eval_episodes=10, return_episode_rewards=True)
-    
-    # Log the mean and standard deviation of rewards
-    writer.add_scalar("test/mean_reward", mean_reward, steps)
-    writer.add_scalar("test/std_reward", std_reward, steps)
-    
-    # Optionally log episode rewards for each evaluation episode
-    for i, episode_reward in enumerate(episode_rewards):
-        writer.add_scalar(f"test/episode_reward_{i}", episode_reward, steps)
-
-    print(f"Testing finished. Mean reward: {mean_reward} +/- {std_reward}")
-    print(f"Episode rewards: {episode_rewards}")
+  """Test the trained model using evaluate_policy and log performance to TensorBoard."""
+  print("Testing started.")
+  # Evaluate the policy using evaluate_policy from SB3
+  mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
+  
+  # Log the results to TensorBoard
+  writer.add_scalar("test/mean_reward", mean_reward)
+  writer.add_scalar("test/std_reward", std_reward)
+  print(f"Testing finished. Mean reward: {mean_reward} +/- {std_reward}")
 
 if __name__ == '__main__':
   main()

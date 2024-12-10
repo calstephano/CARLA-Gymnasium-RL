@@ -269,10 +269,10 @@ class CarlaEnv(gym.Env):
     ego_waypoint = self.world.get_map().get_waypoint(ego_location)
     lane_width = ego_waypoint.lane_width if ego_waypoint else 2.0
 
-    # Lane positioning 
-    r_lane = -abs(lateral_dis / lane_width)
-    if abs(lateral_dis) <= lane_width * 0.25:   # If centered within 25% of lane width,
-      r_lane += 0.5                             #   Positive reward for staying in the center (safety)
+    # Lane positioning reward: quadratic penalty for deviation from lane center
+    r_lane = - (lateral_dis ** 2) / (lane_width ** 2)  # Penalize more as it moves away from center
+    if abs(lateral_dis) <= lane_width * 0.25:          # Reward for staying within the central 25% of lane width
+      r_lane += 0.5  
 
     # Calculate the desired heading based on the next waypoint's direction
     waypoint_x, waypoint_y = self.waypoints[0][:2]
@@ -282,10 +282,15 @@ class CarlaEnv(gym.Env):
     vehicle_heading = np.arctan2(ego_y - waypoint_y, ego_x - waypoint_x)
     desired_heading = np.arctan2(np.sin(vehicle_heading - delta_yaw), np.cos(vehicle_heading - delta_yaw))
 
-    # Reward the vehicle for turning in the right direction
+    # Reward the vehicle for heading over in the right direction
     r_heading = -abs(desired_heading)       # Penalize the deviation from the desired heading
     if abs(desired_heading) < np.pi / 18:   # If the vehicle is within 10 degrees of the desired heading
-        r_heading += 1                      # Give a positive reward for correct orientation
+      r_heading += 1                        # Give a positive reward for correct orientation
+   
+    # Speed (safety & efficiency)
+    r_speed = -abs((speed - self.desired_speed) / self.desired_speed)  # If too slow, penalize speed (efficiency)
+    if abs(lateral_dis) > lane_width * 0.5:                            # If severely out of lane,
+      r_speed -= 1                                                     #   Penalize high speed (safety)
 
     # Yaw changes (Safety)
     max_delta_yaw = np.pi / 4
@@ -317,23 +322,18 @@ class CarlaEnv(gym.Env):
         # Penalize for making progress while off-lane
         progress_reward = -1
 
-    # Speed (safety & efficiency)
-    r_speed = -abs((speed - self.desired_speed) / self.desired_speed)  # If too slow, penalize speed (efficiency)
-    if abs(lateral_dis) > lane_width * 0.5:                            # If severely out of lane,
-      r_speed -= 1                                                     #   Penalize high speed (safety)
-
     # Combine rewards
     total_reward = (
       # Safety
       50 * r_collision +
       10 * r_lane +
-      5 * r_heading +
+      r_heading +
 
       # Efficiency
-      2 * progress_reward +
+      progress_reward +
 
       # Both
-      r_speed
+      0.5 * r_speed
     )
     total_reward = np.clip(total_reward, -100, 100)
 

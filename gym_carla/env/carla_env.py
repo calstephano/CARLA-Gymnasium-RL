@@ -283,9 +283,9 @@ class CarlaEnv(gym.Env):
     desired_heading = np.arctan2(np.sin(vehicle_heading - delta_yaw), np.cos(vehicle_heading - delta_yaw))
 
     # Reward the vehicle for turning in the right direction
-    r_heading = -abs(desired_heading)  # Penalize the deviation from the desired heading
+    r_heading = -abs(desired_heading)       # Penalize the deviation from the desired heading
     if abs(desired_heading) < np.pi / 18:   # If the vehicle is within 10 degrees of the desired heading
-        r_heading += 1                 # Give a positive reward for correct orientatio
+        r_heading += 1                      # Give a positive reward for correct orientation
 
     # Yaw changes (Safety)
     max_delta_yaw = np.pi / 4
@@ -330,10 +330,10 @@ class CarlaEnv(gym.Env):
       5 * r_heading +
 
       # Efficiency
-      progress_reward +
+      2 * progress_reward +
 
       # Both
-      0.2 * r_speed
+      r_speed
     )
     total_reward = np.clip(total_reward, -100, 100)
 

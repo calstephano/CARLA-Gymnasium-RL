@@ -273,9 +273,18 @@ class CarlaEnv(gym.Env):
     if abs(lateral_dis) <= lane_width * 0.25:   # If centered within 25% of lane width,
       r_lane += 0.5                             #   Positive reward for staying in the center (safety)
 
-    # Heading (Safety)
-    max_delta_yaw = np.pi / 4
-    r_heading = -abs(delta_yaw / max_delta_yaw)
+    # Calculate the desired heading based on the next waypoint's direction
+    waypoint_x, waypoint_y = self.waypoints[0][:2]
+    ego_x, ego_y = get_pos(self.ego)
+
+    # Calculate the angle between the vehicle's current heading and the target heading (toward the next waypoint)
+    vehicle_heading = np.arctan2(ego_y - waypoint_y, ego_x - waypoint_x)
+    desired_heading = np.arctan2(np.sin(vehicle_heading - delta_yaw), np.cos(vehicle_heading - delta_yaw))
+
+    # Reward the vehicle for turning in the right direction
+    r_heading = -abs(desired_heading)  # Penalize the deviation from the desired heading
+    if abs(desired_heading) < np.pi / 18:   # If the vehicle is within 10 degrees of the desired heading
+        r_heading += 1                 # Give a positive reward for correct orientatio
 
     # Yaw changes (Safety)
     r_smooth_yaw = -abs(delta_yaw - getattr(self, 'previous_yaw', delta_yaw)) / max_delta_yaw
@@ -317,7 +326,6 @@ class CarlaEnv(gym.Env):
       50 * r_collision +
       10 * r_lane +
       5 * r_heading +
-      5 * r_smooth_yaw +
 
       # Efficiency
       progress_reward +

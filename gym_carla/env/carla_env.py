@@ -249,7 +249,7 @@ class CarlaEnv(gym.Env):
     obs = self._get_obs()
     lateral_dis, delta_yaw, speed, vehicle_front = obs['state']
 
-    # Collision
+    # Collision (safety)
     if self.collision_detector.get_latest_collision_intensity():
       r_collision = -1 
     else:
@@ -260,25 +260,20 @@ class CarlaEnv(gym.Env):
     ego_waypoint = self.world.get_map().get_waypoint(ego_location)
     lane_width = ego_waypoint.lane_width if ego_waypoint else 2.0
 
-    # Lane positioning
+    # Lane positioning 
     r_lane = -abs(lateral_dis / lane_width)
-    if abs(lateral_dis) <= lane_width * 0.25:   # Centered within 25% of lane width
-      r_lane += 0.5                             # Positive reward for staying in the center
+    if abs(lateral_dis) <= lane_width * 0.25:   # If centered within 25% of lane width,
+      r_lane += 0.5                             #   Positive reward for staying in the center (safety)
 
-    # Speed
-    r_speed = -abs((speed - self.desired_speed) / self.desired_speed)  # Penalize speed deviations
-    if abs(lateral_dis) > lane_width * 0.5:                            # Dynamic speed reward
-      r_speed -= 1                                                     # Penalize high speed when off-center
-
-    # Heading
+    # Heading (Safety)
     max_delta_yaw = np.pi / 4
     r_heading = -abs(delta_yaw / max_delta_yaw)
 
-    # Yaw changes
+    # Yaw changes (Safety)
     r_smooth_yaw = -abs(delta_yaw - getattr(self, 'previous_yaw', delta_yaw)) / max_delta_yaw
     self.previous_yaw = delta_yaw
 
-    # Reward for waypoint progress
+    # Reward for waypoint progress (Efficiency)
     progress_reward = 0
     if self.waypoints:
       ego_x, ego_y = get_pos(self.ego)
@@ -303,14 +298,24 @@ class CarlaEnv(gym.Env):
         # Penalize for making progress while off-lane
         progress_reward = -1
 
+    # Speed (safety & efficiency)
+    r_speed = -abs((speed - self.desired_speed) / self.desired_speed)  # If too slow, penalize speed (efficiency)
+    if abs(lateral_dis) > lane_width * 0.5:                            # If severely out of lane,
+      r_speed -= 1                                                     #   Penalize high speed (safety)
+
     # Combine rewards
     total_reward = (
+      # Safety
       50 * r_collision +
       10 * r_lane +
       5 * r_heading +
       5 * r_smooth_yaw +
-      0.2 * r_speed +
-      progress_reward
+
+      # Efficiency
+      progress_reward +
+
+      # Both
+      0.2 * r_speed
     )
     total_reward = np.clip(total_reward, -100, 100)
 

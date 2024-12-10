@@ -105,7 +105,7 @@ def select_model(env, model_type, **kwargs):
   else:
     raise ValueError(f"Unsupported model type: {model_type}")
 
-def evaluate_model(model, env, writer, steps=1000):
+def evaluate_model(model, env, writer, steps=3000):
   """Test the trained model using evaluate_policy and log performance to TensorBoard."""
   print("Testing started.")
   # Evaluate the policy using evaluate_policy from SB3

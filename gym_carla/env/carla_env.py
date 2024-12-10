@@ -288,6 +288,7 @@ class CarlaEnv(gym.Env):
         r_heading += 1                 # Give a positive reward for correct orientatio
 
     # Yaw changes (Safety)
+    max_delta_yaw = np.pi / 4
     r_smooth_yaw = -abs(delta_yaw - getattr(self, 'previous_yaw', delta_yaw)) / max_delta_yaw
     self.previous_yaw = delta_yaw
 

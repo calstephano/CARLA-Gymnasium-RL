@@ -9,6 +9,7 @@ import time
 import threading
 
 from PIL import Image
+import matplotlib.pyplot as plt
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -150,6 +151,14 @@ class CarlaEnv(gym.Env):
     return self._get_obs(), info
 
   def step(self, action):
+    # Get the observation (state)
+    obs = self._get_obs()
+    lateral_dis, delta_yaw, speed, vehicle_front = obs['state']
+    
+    # Log the lateral deviation to TensorBoard at each timestep
+    if self.writer:
+        self.writer.add_scalar('Lateral Deviation', lateral_dis, self.total_step)
+
     # Pass updated polygons and waypoints to PygameManager for rendering
     self.pygame_manager.vehicle_polygons = self.vehicle_polygons
     self.pygame_manager.walker_polygons = self.walker_polygons

@@ -289,6 +289,9 @@ class CarlaEnv(gym.Env):
     lspeed_lon = np.dot([v.x, v.y], [np.cos(delta_yaw), np.sin(delta_yaw)])
     r_lateral_acc = -abs(current_steer) * (lspeed_lon**2 / self.desired_speed**2)
 
+    # Penalty for steering:
+    r_steer = -self.ego.get_control().steer**2
+
     # Reward for waypoint progress (Efficiency)
     progress_reward = 0
     if self.waypoints:
@@ -320,6 +323,7 @@ class CarlaEnv(gym.Env):
       5 * r_heading +
       50 * r_collision +
       2 * r_smooth_yaw +
+      5 * r_steer +
       0.5 * r_lateral_acc +
 
       # Efficiency

@@ -321,11 +321,12 @@ class CarlaEnv(gym.Env):
     # Log rewards
     if self.writer:
       reward_components = {
-        "collision_reward": r_collision,
-        "lane_reward": r_lane,
+        "collision_penalty": r_collision,
+        "lane_reward_penalty": r_lane,
         "heading_reward": r_heading,
         "smooth_yaw_penalty": r_smooth_yaw,
-        "progress_reward": progress_reward,
+        "progress_reward_penalty": progress_reward,
+        "speed_reward_penalty": r_speed,
         "total_reward": total_reward
       }
       for key, value in reward_components.items():

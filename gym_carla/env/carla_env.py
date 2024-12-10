@@ -322,15 +322,15 @@ class CarlaEnv(gym.Env):
     return info
   
   def _reset_environment_objects(self):
-    # Stop listening for data
-    self.collision_detector.stop()
-    self.camera_sensors.stop()
-
     # Delete actors
     clear_all_actors(self.world, [
       'sensor.other.collision', 'sensor.camera.rgb',
       'vehicle.*', 'controller.ai.walker', 'walker.*'
     ])
+
+    # Stop listening for data
+    self.collision_detector.stop()
+    self.camera_sensors.stop()
 
     # Clear sensor objects
     self.collision_detector.collision_detector = None
